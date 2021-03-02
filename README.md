@@ -12,7 +12,7 @@ This is a python program to download files from BS.
   * Enable the VPN in the Opera Settings.
 
 * Operadriver
-  * Downlaod the Operadriver from [this](https://github.com/operasoftware/operachromiumdriver/releases) github repository move it into a folder with the BS Downloader .exe file.
+  * Download the Operadriver from [this](https://github.com/operasoftware/operachromiumdriver/releases) github repository move it into a folder with the BS Downloader .exe file.
    
 # Help
 * Configuration

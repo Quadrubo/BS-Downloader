@@ -299,17 +299,13 @@ class Win1:
                 print(title_list)
 
             downloading = True
-            cancel = False
             meldung = False
             while downloading:
+                downloading = False
                 for file in os.listdir(OPERA_DLFOLDER):
-                    cancel = True
                     if file.rsplit(".")[-1] == "opdownload":
-                        cancel = False
-                if cancel:
-                    downloading = False
-                else:
-                    sleep(1)
+                        downloading = True
+                if downloading:
                     if not meldung:
                         print("WARNING: At least one file is still downloading, The Program will wait before moving the files...")
                         meldung = True
