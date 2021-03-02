@@ -14,3 +14,8 @@ This is a python program to download files from BS.
 * Operadriver
   * Downlaod the Operadriver from [this](https://github.com/operasoftware/operachromiumdriver/releases) github repository move it into a folder with the BS Downloader .exe file.
    
+# Help
+* Configuration
+  * Opera Download Folder: *Your Opera Download Folder*
+  * Opera Profile Folder *%appdata%/Opera Software/Opera Stable*
+  * Opera Bin Exe *%localappdata%/Programs/Opera/{highest-desired number}/opera.exe*
