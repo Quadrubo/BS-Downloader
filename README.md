@@ -3,7 +3,7 @@ This is a python program to download files from BS.
 
 # Requirements
 * BS Downloader
-  * Download BS Downloader from the releases tab.
+  * Download BS Downloader from the [releases](https://github.com/Quadrubo/BS-Downloader/releases) tab.
   * Move it to where ever you like (It'll create other files so a Folder would be nice)
 
 * Opera Browser
