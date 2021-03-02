@@ -62,7 +62,7 @@ class Win1:
         self.frame2 = Frame(self.master)
         self.frame2.grid(row=1, column=0)
 
-        self.master.title("BS Downloader Early Access Beta Alpha v1.0")
+        self.master.title("BS Downloader GUI v2.0")
 
         self.label_url = Label(self.frame, text="BS Url: ")
         self.label_url.grid(row=0, column=0)
