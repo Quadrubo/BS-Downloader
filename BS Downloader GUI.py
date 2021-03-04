@@ -93,6 +93,7 @@ class Win1:
         self.entry_max_var = StringVar()
         self.entry_max = Entry(self.frame, textvariable=self.entry_max_var, width=10, justify="center")
         self.entry_max.grid(row=3, column=1, sticky=W)
+        self.entry_max_var.set(0)
 
         self.label_pref = Label(self.frame, text="Preferred Platform: ")
         self.label_pref.grid(row=4, column=0)
@@ -239,12 +240,13 @@ class Win1:
 
             title_list = []
 
-            folgen_arr_temp = folgen_arr.copy()
+            if maximum != 0:
+                folgen_arr_temp = folgen_arr.copy()
 
-            folgen_arr = []
+                folgen_arr = []
 
-            for i in range(0, maximum):
-                folgen_arr.append(folgen_arr_temp[i])
+                for i in range(0, maximum):
+                    folgen_arr.append(folgen_arr_temp[i])
 
             folge_gesamt = 0
             for folge in folgen_arr:
@@ -293,7 +295,7 @@ class Win1:
                         break
                     counter += 1
 
-                if not found:
+                if found:
                     driver.find_element_by_xpath('//*[@id="root"]/section/ul[1]/li[' + str(counter) + ']/a').click()
 
 
