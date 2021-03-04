@@ -19,7 +19,7 @@ class Win1:
         self.get_config()
 
     def set_geo(self):
-        self.master.geometry("420x130")
+        self.master.geometry("425x321")
         self.master.resizable(0, 0)
 
     def get_config(self):
@@ -64,7 +64,7 @@ class Win1:
         self.frame2 = Frame(self.master)
         self.frame2.grid(row=1, column=0)
 
-        self.master.title("BS Downloader GUI v2.2")
+        self.master.title("BS Downloader GUI v2.3")
 
         self.label_url = Label(self.frame, text="BS Url: ")
         self.label_url.grid(row=0, column=0)
@@ -76,8 +76,7 @@ class Win1:
         self.label_save.grid(row=1, column=0)
 
         self.button_save_var = StringVar()
-        self.button_save = Button(self.frame, textvariable=self.button_save_var, command=self.browse_savefolder,
-                                  width=42)
+        self.button_save = Button(self.frame, textvariable=self.button_save_var, command=self.browse_savefolder, width=42)
         self.button_save.grid(row=1, column=1, sticky=W)
         self.button_save_var.set("Browse...")
 
@@ -88,20 +87,43 @@ class Win1:
         self.entry_already = Entry(self.frame, textvariable=self.entry_already_var, width=10, justify="center")
         self.entry_already.grid(row=2, column=1, sticky=W)
 
-        self.label_autocaptcha = Label(self.frame, text="Auto Captcha: ")
-        self.label_autocaptcha.grid(row=3, column=0)
+        self.label_max = Label(self.frame, text="Limit: ")
+        self.label_max.grid(row=3, column=0)
 
-        self.checkbox_autocaptcha = Checkbutton(self.frame, state=DISABLED)
-        self.checkbox_autocaptcha.grid(row=3, column=1, sticky=W)
+        self.entry_max_var = StringVar()
+        self.entry_max = Entry(self.frame, textvariable=self.entry_max_var, width=10, justify="center")
+        self.entry_max.grid(row=3, column=1, sticky=W)
+
+        self.label_pref = Label(self.frame, text="Preferred Platform: ")
+        self.label_pref.grid(row=4, column=0)
+
+        self.radio_pref_var = StringVar()
+
+        self.radio_pref_vivo = Radiobutton(self.frame, text="vivo", variable=self.radio_pref_var, value="vivo")
+        self.radio_pref_vivo.grid(row=4, column=1, sticky=W)
+        self.radio_pref_streamtape = Radiobutton(self.frame, text="streamtape", variable=self.radio_pref_var, value="streamtape")
+        self.radio_pref_streamtape.grid(row=5, column=1, sticky=W)
+        self.radio_pref_voe = Radiobutton(self.frame, text="voe", variable=self.radio_pref_var, value="voe")
+        self.radio_pref_voe.grid(row=6, column=1, sticky=W)
+        self.radio_pref_vidoza = Radiobutton(self.frame, text="vidoza", variable=self.radio_pref_var, value="vidoza")
+        self.radio_pref_vidoza.grid(row=7, column=1, sticky=W)
+        self.radio_pref_mixdrop = Radiobutton(self.frame, text="mixdrop", variable=self.radio_pref_var, value="mixdrop")
+        self.radio_pref_mixdrop.grid(row=8, column=1, sticky=W)
+        self.radio_pref_playtube = Radiobutton(self.frame, text="playtube", variable=self.radio_pref_var, value="playtube")
+        self.radio_pref_playtube.grid(row=9, column=1, sticky=W)
+        self.radio_pref_upstream = Radiobutton(self.frame, text="upstream", variable=self.radio_pref_var, value="upstream")
+        self.radio_pref_upstream.grid(row=10, column=1, sticky=W)
+        self.radio_pref_vidlox = Radiobutton(self.frame, text="vidlox", variable=self.radio_pref_var, value="vidlox")
+        self.radio_pref_vidlox.grid(row=11, column=1, sticky=W)
+        self.radio_pref_vivo.select()
 
         self.button_start_var = StringVar()
-        self.button_start = Button(self.frame, textvariable=self.button_start_var, command=self.start, width=42,
-                                   bg="lightgreen")
-        self.button_start.grid(row=4, column=1)
+        self.button_start = Button(self.frame, textvariable=self.button_start_var, command=self.start, width=42,bg="lightgreen")
+        self.button_start.grid(row=12, column=1)
         self.button_start_var.set("Start!")
 
         self.button1 = Button(self.frame, text="Config", command=lambda: self.new_window(Win2), bg="orange")
-        self.button1.grid(row=4, column=0)
+        self.button1.grid(row=12, column=0)
 
     def open_dir(self):
         os.system("start " + self.dlfolder)
@@ -155,6 +177,18 @@ class Win1:
             execute = False
         else:
             print("INFO: Files that already exist: " + str(already_exist))
+        try:
+            maximum = int(self.entry_max_var.get())
+        except:
+            maximum = self.entry_max_var.get()
+            pass
+        if type(maximum) is not int:
+            print("ERROR: You didn't enter a number: " + str(maximum))
+            execute = False
+        else:
+            print("INFO: Limit: " + str(maximum))
+
+        preferred_website = self.radio_pref_var.get()
 
         if execute:
             opera_profile = OPERA_PROFILE
@@ -163,7 +197,6 @@ class Win1:
             options.add_argument("disable-blink-features=AutomationControlled")
             options._binary_location = OPERA_BIN
             driver = Opera(executable_path='./operadriver.exe', options=options)
-            # driver = webdriver.Opera(executable_path='./operadriver.exe', options=options)
 
             driver.get(website)
 
@@ -206,6 +239,13 @@ class Win1:
 
             title_list = []
 
+            folgen_arr_temp = folgen_arr.copy()
+
+            folgen_arr = []
+
+            for i in range(0, maximum):
+                folgen_arr.append(folgen_arr_temp[i])
+
             folge_gesamt = 0
             for folge in folgen_arr:
                 folge_gesamt += 1
@@ -225,6 +265,37 @@ class Win1:
                     continue
 
                 driver.get(folge[0])
+
+                str_services_ul = ""
+
+                loop = True
+                while loop:
+                    try:
+                        str_services_ul = driver.find_element_by_xpath('//*[@id="root"]/section/ul[1]')
+                        loop = False
+                    except:
+                        pass
+
+                str_services_list = str_services_ul.find_elements_by_tag_name('a')
+
+                counter = 0
+                for element in str_services_list:
+                    str_services_list[counter] = element.text.lower()
+                    counter += 1
+
+                found = False
+
+                counter = 1
+                for element in str_services_list:
+                    if element == preferred_website:
+                        found = True
+                        counter += 1
+                        break
+                    counter += 1
+
+                if not found:
+                    driver.find_element_by_xpath('//*[@id="root"]/section/ul[1]/li[' + str(counter) + ']/a').click()
+
 
                 loop = True
                 while loop:
