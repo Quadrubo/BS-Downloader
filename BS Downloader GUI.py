@@ -64,7 +64,7 @@ class Win1:
         self.frame2 = Frame(self.master)
         self.frame2.grid(row=1, column=0)
 
-        self.master.title("BS Downloader GUI v2.3.2")
+        self.master.title("BS Downloader GUI v2.3.3")
 
         self.label_url = Label(self.frame, text="BS Url: ")
         self.label_url.grid(row=0, column=0)
@@ -104,17 +104,17 @@ class Win1:
         self.radio_pref_vivo.grid(row=4, column=1, sticky=W)
         self.radio_pref_streamtape = Radiobutton(self.frame, text="streamtape", variable=self.radio_pref_var, value="streamtape")
         self.radio_pref_streamtape.grid(row=5, column=1, sticky=W)
-        self.radio_pref_voe = Radiobutton(self.frame, text="voe", variable=self.radio_pref_var, value="voe")
+        self.radio_pref_voe = Radiobutton(self.frame, text="voe (can't play video on link)", variable=self.radio_pref_var, value="voe", state=DISABLED)
         self.radio_pref_voe.grid(row=6, column=1, sticky=W)
         self.radio_pref_vidoza = Radiobutton(self.frame, text="vidoza", variable=self.radio_pref_var, value="vidoza")
         self.radio_pref_vidoza.grid(row=7, column=1, sticky=W)
-        self.radio_pref_mixdrop = Radiobutton(self.frame, text="mixdrop", variable=self.radio_pref_var, value="mixdrop")
+        self.radio_pref_mixdrop = Radiobutton(self.frame, text="mixdrop (uses m3u8 streaming)", variable=self.radio_pref_var, value="mixdrop", state=DISABLED)
         self.radio_pref_mixdrop.grid(row=8, column=1, sticky=W)
-        self.radio_pref_playtube = Radiobutton(self.frame, text="playtube", variable=self.radio_pref_var, value="playtube")
+        self.radio_pref_playtube = Radiobutton(self.frame, text="playtube (uses m3u8 streaming)", variable=self.radio_pref_var, value="playtube", state=DISABLED)
         self.radio_pref_playtube.grid(row=9, column=1, sticky=W)
-        self.radio_pref_upstream = Radiobutton(self.frame, text="upstream", variable=self.radio_pref_var, value="upstream")
+        self.radio_pref_upstream = Radiobutton(self.frame, text="upstream (doesn't allow direct access)", variable=self.radio_pref_var, value="upstream", state=DISABLED)
         self.radio_pref_upstream.grid(row=10, column=1, sticky=W)
-        self.radio_pref_vidlox = Radiobutton(self.frame, text="vidlox", variable=self.radio_pref_var, value="vidlox")
+        self.radio_pref_vidlox = Radiobutton(self.frame, text="vidlox (uses m3u8 streaming)", variable=self.radio_pref_var, value="vidlox", state=DISABLED)
         self.radio_pref_vidlox.grid(row=11, column=1, sticky=W)
         self.radio_pref_vivo.select()
 
@@ -269,23 +269,32 @@ class Win1:
                 driver.get(folge[0])
 
                 str_services_ul = ""
+                str_services_ul_2 = ""
 
                 loop = True
                 while loop:
                     try:
                         str_services_ul = driver.find_element_by_xpath('//*[@id="root"]/section/ul[1]')
+                        str_services_ul_2 = driver.find_element_by_xpath('//*[@id="root"]/section/ul[2]')
                         loop = False
                     except:
                         pass
 
                 str_services_list = str_services_ul.find_elements_by_tag_name('a')
+                str_services_list2 = str_services_ul_2.find_elements_by_tag_name('a')
 
                 counter = 0
                 for element in str_services_list:
                     str_services_list[counter] = element.text.lower()
                     counter += 1
 
+                counter = 0
+                for element in str_services_list2:
+                    str_services_list2[counter] = element.text.lower()
+                    counter += 1
+
                 found = False
+                found2 = False
 
                 counter = 0
                 for element in str_services_list:
@@ -297,9 +306,25 @@ class Win1:
                         break
                     counter += 1
 
+                if not found:
+                    counter = 0
+                    for element in str_services_list2:
+                        print(element.lower())
+                        print(preferred_website)
+                        if element.lower() == preferred_website:
+                            found2 = True
+                            counter += 1
+                            break
+                        counter += 1
+
+                if not found and not found2:
+                    counter = 1
+
                 if found and counter != 1:
                     driver.find_element_by_xpath('//*[@id="root"]/section/ul[1]/li[' + str(counter) + ']/a').click()
 
+                if found2:
+                    driver.find_element_by_xpath('//*[@id="root"]/section/ul[2]/li[' + str(counter) + ']/a').click()
 
                 loop = True
                 while loop:
@@ -324,7 +349,7 @@ class Win1:
                     except:
                         pass
 
-                video_mode = driver.find_element_by_xpath('//*[@id="root"]/section/ul[1]/li[1]/a').text.lower()
+                video_mode = driver.find_element_by_xpath('//*[@id="root"]/section/ul[1]/li[' + str(counter) + ']/a').text.lower()
 
                 print("\"" + video_mode + "\"")
 
