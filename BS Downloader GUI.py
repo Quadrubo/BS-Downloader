@@ -1,8 +1,10 @@
+import threading
 from tkinter import *
 import json
 from pathlib import Path
 from tkinter import filedialog
 from selenium import webdriver
+from seleniumrequests import Opera
 from time import sleep
 import os
 import shutil
@@ -62,7 +64,7 @@ class Win1:
         self.frame2 = Frame(self.master)
         self.frame2.grid(row=1, column=0)
 
-        self.master.title("BS Downloader GUI v2.0")
+        self.master.title("BS Downloader GUI v2.2")
 
         self.label_url = Label(self.frame, text="BS Url: ")
         self.label_url.grid(row=0, column=0)
@@ -74,7 +76,8 @@ class Win1:
         self.label_save.grid(row=1, column=0)
 
         self.button_save_var = StringVar()
-        self.button_save = Button(self.frame, textvariable=self.button_save_var, command=self.browse_savefolder, width=42)
+        self.button_save = Button(self.frame, textvariable=self.button_save_var, command=self.browse_savefolder,
+                                  width=42)
         self.button_save.grid(row=1, column=1, sticky=W)
         self.button_save_var.set("Browse...")
 
@@ -91,9 +94,9 @@ class Win1:
         self.checkbox_autocaptcha = Checkbutton(self.frame, state=DISABLED)
         self.checkbox_autocaptcha.grid(row=3, column=1, sticky=W)
 
-
         self.button_start_var = StringVar()
-        self.button_start = Button(self.frame, textvariable=self.button_start_var, command=self.start, width=42, bg="lightgreen")
+        self.button_start = Button(self.frame, textvariable=self.button_start_var, command=self.start, width=42,
+                                   bg="lightgreen")
         self.button_start.grid(row=4, column=1)
         self.button_start_var.set("Start!")
 
@@ -159,11 +162,18 @@ class Win1:
             options.add_argument('user-data-dir=' + opera_profile)
             options.add_argument("disable-blink-features=AutomationControlled")
             options._binary_location = OPERA_BIN
-            driver = webdriver.Opera(executable_path='./operadriver.exe', options=options)
+            driver = Opera(executable_path='./operadriver.exe', options=options)
+            # driver = webdriver.Opera(executable_path='./operadriver.exe', options=options)
 
             driver.get(website)
 
-            table = driver.find_element_by_xpath('//*[@id="root"]/section/table')
+            loop = True
+            while loop:
+                try:
+                    table = driver.find_element_by_xpath('//*[@id="root"]/section/table')
+                    loop = False
+                except:
+                    pass
 
             tr_list = table.find_elements_by_tag_name('tr')
 
@@ -194,8 +204,6 @@ class Win1:
 
                 folgen_arr.append([folge_link, folge_nbr, folge_name, ""])
 
-            sleep(1)
-
             title_list = []
 
             folge_gesamt = 0
@@ -218,29 +226,99 @@ class Win1:
 
                 driver.get(folge[0])
 
-                sleep(1)
-
-                play_button = driver.find_element_by_xpath('//*[@id="root"]/section/div[8]/div[1]')
-
-                play_button.click()
-
-                sleep(5)
-
                 loop = True
                 while loop:
-                    vscheck = driver.find_element_by_xpath("/html/body/div[4]")
-                    sleep(1)
-                    if "visible" in vscheck.get_attribute("style"):
-                        print("INFO: Captcha found, Human needed O.O")
-                    else:
-                        print("INFO: Captcha solved. Good job Human :)")
+                    try:
+                        driver.find_element_by_xpath('//*[@id="root"]/section/div[8]/div[1]').click()
                         loop = False
+                    except:
+                        pass
 
-                sleep(1)
+                loop = True
+                msg_send = False
+                while loop:
+                    try:
+                        vscheck = driver.find_element_by_xpath("/html/body/div[4]")
+                        if "visible" in vscheck.get_attribute("style"):
+                            if not msg_send:
+                                print("INFO: Captcha found, Human needed O.O")
+                                msg_send = True
+                        else:
+                            print("INFO: Captcha solved. Good job Human :)")
+                            loop = False
+                    except:
+                        pass
 
-                driver.get(driver.find_element_by_xpath('//*[@id="root"]/section/div[8]/a').get_attribute('href'))
+                video_mode = driver.find_element_by_xpath('//*[@id="root"]/section/ul[1]/li[1]/a').text.lower()
 
-                dnl_link = driver.find_element_by_tag_name('source').get_attribute('src')
+                print("\"" + video_mode + "\"")
+
+                dnl_link = ""
+
+                if video_mode == "vivo":
+                    loop = True
+                    while loop:
+                        try:
+                            driver.get(driver.find_element_by_xpath('//*[@id="root"]/section/div[8]/a').get_attribute('href'))
+                            loop = False
+                        except:
+                            pass
+                    dnl_link = driver.find_element_by_tag_name('source').get_attribute('src')
+                elif video_mode == "streamtape":
+                    loop = True
+                    while loop:
+                        try:
+                            driver.switch_to.frame(driver.find_element_by_xpath('//*[@id="root"]/section/div[8]/iframe'))
+                            loop = False
+                        except:
+                            pass
+                    loop = True
+                    sleep(1)
+                    while loop:
+                        try:
+                            driver.find_element_by_xpath('/html/body/div[2]/div[1]').click()
+                        except:
+                            loop = False
+                    loop = True
+                    while loop:
+                        try:
+                            driver.find_element_by_xpath('/html/body/div[2]/div[2]/button').click()
+                            loop = False
+                        except:
+                            pass
+                    driver.find_element_by_xpath('//*[@id="mainvideo"]').click()
+                    dnl_link = driver.find_element_by_xpath('//*[@id="mainvideo"]').get_attribute('src')
+                    driver.switch_to.default_content()
+                elif video_mode == "vidoza":
+                    loop = True
+                    while loop:
+                        try:
+                            driver.switch_to.frame(driver.find_element_by_xpath('//*[@id="root"]/section/div[8]/iframe'))
+                            loop = False
+                        except:
+                            pass
+                    loop = True
+                    while loop:
+                        try:
+                            driver.find_element_by_xpath('//*[@id="vplayer"]/div[1]').click()
+                            loop = False
+                        except:
+                            pass
+                    loop = True
+                    while loop:
+                        try:
+                            driver.find_element_by_xpath('//*[@id="player"]/button').click()
+                            loop = False
+                        except:
+                            pass
+                    loop = True
+                    while loop:
+                        try:
+                            dnl_link = driver.find_element_by_xpath('//*[@id="player_html5_api"]').get_attribute('src')
+                            loop = False
+                        except:
+                            pass
+                    driver.switch_to.default_content()
 
                 filecounter = 0
                 for file in os.listdir(OPERA_DLFOLDER):
@@ -269,8 +347,6 @@ class Win1:
                         title_list.append(file)
                         break
 
-                sleep(1)
-
                 folge_counter += 1
 
                 for file in os.listdir(OPERA_DLFOLDER):
@@ -281,8 +357,7 @@ class Win1:
                         folgen_arr_counter = 0
                         for folge in folgen_arr:
                             if folge[3] == file:
-                                os.rename(os.path.join(OPERA_DLFOLDER, file),
-                                          os.path.join(OPERA_DLFOLDER, folge[1] + ".mp4"))
+                                os.rename(os.path.join(OPERA_DLFOLDER, file), os.path.join(OPERA_DLFOLDER, folge[1] + ".mp4"))
                                 folgen_arr[folgen_arr_counter][3] = folge[1] + ".mp4"
                                 tl_counter = 0
                                 for dings in title_list:
@@ -354,6 +429,9 @@ class Win1:
             self.button_start_var.set("Success!")
         else:
             self.button_start_var.set("Something's wrong I can feel it!")
+
+    def solve_captcha(self):
+        pass
 
     def new_window(self, _class):
         self.win = Toplevel(self.master)
@@ -435,7 +513,8 @@ class Win2(Win1):
         self.label2.grid(row=1, column=0)
 
         self.button2_save_var = StringVar()
-        self.button2 = Button(self.frame1, textvariable=self.button2_save_var, command=self.browse_profilefolder, width=70)
+        self.button2 = Button(self.frame1, textvariable=self.button2_save_var, command=self.browse_profilefolder,
+                              width=70)
         self.button2.grid(row=1, column=1)
         self.button2_save_var.set("Browse...")
 
@@ -452,6 +531,7 @@ class Win2(Win1):
 
         self.close_button = Button(self.frame1, text="Exit", command=self.close_window, bg="red")
         self.close_button.grid(row=3, column=0)
+
 
 root = Tk()
 app = Win1(root)
