@@ -64,7 +64,7 @@ class Win1:
         self.frame2 = Frame(self.master)
         self.frame2.grid(row=1, column=0)
 
-        self.master.title("BS Downloader GUI v2.3")
+        self.master.title("BS Downloader GUI v2.3.2")
 
         self.label_url = Label(self.frame, text="BS Url: ")
         self.label_url.grid(row=0, column=0)
@@ -287,15 +287,17 @@ class Win1:
 
                 found = False
 
-                counter = 1
+                counter = 0
                 for element in str_services_list:
-                    if element == preferred_website:
+                    print(element.lower())
+                    print(preferred_website)
+                    if element.lower() == preferred_website:
                         found = True
                         counter += 1
                         break
                     counter += 1
 
-                if found:
+                if found and counter != 1:
                     driver.find_element_by_xpath('//*[@id="root"]/section/ul[1]/li[' + str(counter) + ']/a').click()
 
 
