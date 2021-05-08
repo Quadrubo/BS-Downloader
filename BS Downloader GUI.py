@@ -1,4 +1,3 @@
-import threading
 from tkinter import *
 import json
 from pathlib import Path
@@ -8,6 +7,7 @@ from seleniumrequests import Opera
 from time import sleep
 import os
 import shutil
+from datetime import datetime
 
 
 class Win1:
@@ -17,6 +17,26 @@ class Win1:
         self.set_geo()
         self.show_widgets()
         self.get_config()
+
+    def start_log(self):
+        now = datetime.now()
+
+        if not os.path.isdir('./logs'):
+            os.mkdir("./logs")
+
+        self.log = "./logs/log-" + now.strftime("%d-%m-%y %H-%M-%S") + ".txt"
+
+    def write_log(self, message):
+        now = datetime.now()
+
+        dt_string = now.strftime("%d/%m/%y %H:%M:%S")
+        message = dt_string + " | " + str(message)
+
+        print(message)
+
+        file = open(self.log, "a")
+        file.write(message + "\n")
+        file.close()
 
     def set_geo(self):
         self.master.geometry("425x321")
@@ -130,64 +150,65 @@ class Win1:
         os.system("start " + self.dlfolder)
 
     def start(self):
-        print("INFO: Starting the Webscraper...")
+        self.start_log()
+        self.write_log("INFO: Starting the Webscraper...")
 
         execute = True
 
         # The profile where I enabled the VPN previously using the GUI.
         OPERA_DLFOLDER = self.dlfolder
         if OPERA_DLFOLDER == "" or OPERA_DLFOLDER == "Browse...":
-            print("ERROR: Opera Download Folder was not specified: " + OPERA_DLFOLDER)
+            self.write_log("ERROR: Opera Download Folder was not specified: " + OPERA_DLFOLDER)
             execute = False
         else:
-            print("INFO: Opera Download Folder: " + OPERA_DLFOLDER)
+            self.write_log("INFO: Opera Download Folder: " + OPERA_DLFOLDER)
         OPERA_PROFILE = self.profilefolder
         if OPERA_PROFILE == "" or OPERA_PROFILE == "Browse...":
-            print("ERROR: Opera Profile Folder was not specified: " + OPERA_PROFILE)
+            self.write_log("ERROR: Opera Profile Folder was not specified: " + OPERA_PROFILE)
             execute = False
         else:
-            print("INFO: Opera Profile Folder: " + OPERA_PROFILE)
+            self.write_log("INFO: Opera Profile Folder: " + OPERA_PROFILE)
         OPERA_BIN = self.binfile
         if OPERA_BIN == "" or OPERA_BIN == "Browse...":
-            print("ERROR: Opera Binary EXE File was not specified: " + OPERA_BIN)
+            self.write_log("ERROR: Opera Binary EXE File was not specified: " + OPERA_BIN)
             execute = False
         else:
-            print("INFO: Opera Binary EXE File: " + OPERA_BIN)
+            self.write_log("INFO: Opera Binary EXE File: " + OPERA_BIN)
         website = self.entry_url.get()
         if website == "":
-            print("ERROR: Website was not specified: " + website)
+            self.write_log("ERROR: Website was not specified: " + website)
             execute = False
         else:
-            print("INFO: Website: " + website)
+            self.write_log("INFO: Website: " + website)
         save_dir = self.button_save_var.get()
         if save_dir == "" or save_dir == "Browse...":
-            print("ERROR: Save Folder was not specified: " + save_dir)
+            self.write_log("ERROR: Save Folder was not specified: " + save_dir)
             execute = False
         else:
-            print("INFO: Save Folder: " + OPERA_BIN)
+            self.write_log("INFO: Save Folder: " + OPERA_BIN)
         already_exist = self.entry_already_var.get()
         try:
             already_exist = int(self.entry_already_var.get())
         except:
             pass
         if already_exist == "":
-            print("ERROR: It's not specified, how many files already exist: " + str(already_exist))
+            self.write_log("ERROR: It's not specified, how many files already exist: " + str(already_exist))
             execute = False
         elif type(already_exist) is not int:
-            print("ERROR: You didn't enter a number: " + str(already_exist))
+            self.write_log("ERROR: You didn't enter a number: " + str(already_exist))
             execute = False
         else:
-            print("INFO: Files that already exist: " + str(already_exist))
+            self.write_log("INFO: Files that already exist: " + str(already_exist))
         try:
             maximum = int(self.entry_max_var.get())
         except:
             maximum = self.entry_max_var.get()
             pass
         if type(maximum) is not int:
-            print("ERROR: You didn't enter a number: " + str(maximum))
+            self.write_log("ERROR: You didn't enter a number: " + str(maximum))
             execute = False
         else:
-            print("INFO: Limit: " + str(maximum))
+            self.write_log("INFO: Limit: " + str(maximum))
 
         preferred_website = self.radio_pref_var.get()
 
@@ -298,8 +319,6 @@ class Win1:
 
                 counter = 0
                 for element in str_services_list:
-                    print(element.lower())
-                    print(preferred_website)
                     if element.lower() == preferred_website:
                         found = True
                         counter += 1
@@ -309,8 +328,6 @@ class Win1:
                 if not found:
                     counter = 0
                     for element in str_services_list2:
-                        print(element.lower())
-                        print(preferred_website)
                         if element.lower() == preferred_website:
                             found2 = True
                             counter += 1
@@ -336,22 +353,21 @@ class Win1:
 
                 loop = True
                 msg_send = False
+                sleep(1)
                 while loop:
                     try:
                         vscheck = driver.find_element_by_xpath("/html/body/div[4]")
                         if "visible" in vscheck.get_attribute("style"):
                             if not msg_send:
-                                print("INFO: Captcha found, Human needed O.O")
+                                self.write_log("INFO: Captcha found, Human needed O.O")
                                 msg_send = True
                         else:
-                            print("INFO: Captcha solved. Good job Human :)")
+                            self.write_log("INFO: Captcha solved. Good job Human :)")
                             loop = False
                     except:
                         pass
 
                 video_mode = driver.find_element_by_xpath('//*[@id="root"]/section/ul[1]/li[' + str(counter) + ']/a').text.lower()
-
-                print("\"" + video_mode + "\"")
 
                 dnl_link = ""
 
@@ -432,7 +448,7 @@ class Win1:
                     for file in os.listdir(OPERA_DLFOLDER):
                         filecounter_new += 1
 
-                print("INFO: New File found.")
+                self.write_log("INFO: New File found.")
 
                 sleep(1)
 
@@ -458,6 +474,7 @@ class Win1:
                         for folge in folgen_arr:
                             if folge[3] == file:
                                 os.rename(os.path.join(OPERA_DLFOLDER, file), os.path.join(OPERA_DLFOLDER, folge[1] + ".mp4"))
+                                self.write_log("INFO: Renamed \"" + file + "\" to \"" + folge[1] + "\"")
                                 folgen_arr[folgen_arr_counter][3] = folge[1] + ".mp4"
                                 tl_counter = 0
                                 for dings in title_list:
@@ -468,10 +485,10 @@ class Win1:
                                 break
                             folgen_arr_counter += 1
 
-                print("INFO: List of series: ")
-                print(folgen_arr)
-                print("INFO: List of downloaded series: ")
-                print(title_list)
+                self.write_log("INFO: List of series: ")
+                self.write_log(folgen_arr)
+                self.write_log("INFO: List of downloaded series: ")
+                self.write_log(title_list)
 
             downloading = True
             meldung = False
@@ -482,7 +499,7 @@ class Win1:
                         downloading = True
                 if downloading:
                     if not meldung:
-                        print("WARNING: At least one file is still downloading, The Program will wait before moving the files...")
+                        self.write_log("WARNING: At least one file is still downloading, The Program will wait before moving the files...")
                         meldung = True
 
             sleep(1)
@@ -497,6 +514,7 @@ class Win1:
                         if folge[3] == file:
                             os.rename(os.path.join(OPERA_DLFOLDER, file),
                                       os.path.join(OPERA_DLFOLDER, folge[1] + ".mp4"))
+                            self.write_log("INFO: Renamed \"" + file + "\" to \"" + folge[1] + "\"")
                             folgen_arr[folgen_arr_counter][3] = folge[1] + ".mp4"
                             tl_counter = 0
                             for dings in title_list:
@@ -509,23 +527,24 @@ class Win1:
 
             sleep(1)
 
-            print("INFO: Moving files to the destination.")
+            self.write_log("INFO: Moving files to the destination.")
 
             for file in os.listdir(OPERA_DLFOLDER):
                 for folge in folgen_arr:
                     if folge[3] == file:
                         # new_name = folge[1] + "_" + folge[2] + ".mp4"
-                        new_name = folge[3].split(".")
+                        new_name = folge[1].split(".")
                         new_name = int(new_name[0])
                         new_name = str(new_name) + ".mp4"
                         os.rename(os.path.join(OPERA_DLFOLDER, file), os.path.join(OPERA_DLFOLDER, new_name))
+                        self.write_log("INFO: Renamed \"" + file + "\" to \"" + new_name + "\"")
 
             for file in os.listdir(OPERA_DLFOLDER):
                 shutil.move(os.path.join(OPERA_DLFOLDER, file), os.path.join(save_dir, file))
 
             driver.quit()
 
-            print("INFO: Successfully moved all files. Scraping Finished.")
+            self.write_log("INFO: Successfully moved all files. Scraping Finished.")
             self.button_start_var.set("Success!")
         else:
             self.button_start_var.set("Something's wrong I can feel it!")
