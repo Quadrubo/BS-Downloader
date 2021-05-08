@@ -1,22 +1,340 @@
-from tkinter import *
 import json
-from pathlib import Path
-from tkinter import filedialog
+import os
+import re
+import shutil
+import sys
+import webbrowser
+from datetime import datetime
+from pprint import pprint
+
 from selenium import webdriver
 from seleniumrequests import Opera
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+import threading
 from time import sleep
-import os
-import shutil
+
+from PyQt5.QtCore import pyqtSlot, QDir, QStandardPaths
+from PyQt5.QtWidgets import *
 from datetime import datetime
 
+from bs4 import BeautifulSoup
 
-class Win1:
-    def __init__(self, master):
-        self.master = master
 
-        self.set_geo()
-        self.show_widgets()
+
+class MainWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.start_log()
         self.get_config()
+        self.grid_layout = QGridLayout()
+
+        self.image_folder = QDir.currentPath()
+
+        self.setWindowTitle("BS Downloader v3.0.0")
+        self.setLayout(self.grid_layout)
+
+        # Textbox Burning Series Url
+        self.label_url = QLabel(self)
+        self.label_url.setText("Burning Series Url: ")
+        self.grid_layout.addWidget(self.label_url, 0, 0)
+
+        self.textbox_url = QLineEdit(self)
+        self.textbox_url.setToolTip("The url of the series you want to download from Burning Series.")
+        self.grid_layout.addWidget(self.textbox_url, 0, 1, 1, 3)
+        self.textbox_url.editingFinished.connect(self.textbox_change)
+
+        # Save Folder
+        self.label_save_folder = QLabel(self)
+        self.label_save_folder.setText("Save Folder: ")
+        self.grid_layout.addWidget(self.label_save_folder, 1, 0)
+
+        self.button_save_folder = QPushButton("Browse...")
+        self.button_save_folder.setToolTip("The folder the series is gonna be saved to, can be auto selected.")
+        self.grid_layout.addWidget(self.button_save_folder, 1, 1, 1, 3)
+
+        self.button_save_folder.clicked.connect(self.on_save_folder_click)
+
+        # Download from
+
+        self.label_download_from = QLabel(self)
+        self.label_download_from.setText("Download from: ")
+        self.grid_layout.addWidget(self.label_download_from, 2, 0)
+
+        self.textbox_download_from = QLineEdit(self)
+        self.textbox_download_from.setToolTip("The Episode you want to start downloading at.")
+
+        try:
+            fcount = 0
+            for file in os.listdir(self.cfg_dlfolder):
+                fcount += 1
+            self.textbox_download_from.setText(str(fcount + 1))
+        except:
+            pass
+        self.grid_layout.addWidget(self.textbox_download_from, 2, 1)
+
+        # to
+
+        self.label_download_to = QLabel(self)
+        self.label_download_to.setText("Download to: ")
+        self.grid_layout.addWidget(self.label_download_to, 2, 2)
+
+        self.textbox_download_to = QLineEdit(self)
+        self.textbox_download_to.setToolTip("The Episode you want to stop downloading at.")
+        self.grid_layout.addWidget(self.textbox_download_to, 2, 3)
+
+        # Preferred Platform
+
+        self.label_preferred_platform = QLabel(self)
+        self.label_preferred_platform.setText("Preferred Platform: ")
+        self.grid_layout.addWidget(self.label_preferred_platform, 3, 0)
+
+        self.combobox_preferred_platform = QComboBox(self)
+        self.combobox_preferred_platform.addItem("SendFox")
+        self.combobox_preferred_platform.addItem("Vivo")
+        self.combobox_preferred_platform.addItem("Streamtape")
+        self.combobox_preferred_platform.addItem("Vidoza")
+        self.combobox_preferred_platform.setCurrentIndex(0)
+        self.combobox_preferred_platform.setToolTip("The streaming service the series will be downloaded from.")
+        self.grid_layout.addWidget(self.combobox_preferred_platform, 3, 1, 1, 3)
+
+        # Use Threading
+
+        self.label_threading = QLabel(self)
+        self.label_threading.setText("Threading: ")
+        self.grid_layout.addWidget(self.label_threading, 4, 0)
+
+        def box_change():
+            if self.checkbox_threading.checkState() == 0:
+                self.textbox_threading.setDisabled(True)
+            else:
+                self.textbox_threading.setEnabled(True)
+
+        self.checkbox_threading = QCheckBox("Use Threading")
+        self.checkbox_threading.setChecked(True)
+        self.checkbox_threading.setToolTip("Simultaneous Downloads.")
+        self.grid_layout.addWidget(self.checkbox_threading, 4, 1)
+        self.checkbox_threading.stateChanged.connect(box_change)
+
+        self.textbox_threading = QLineEdit(self)
+        self.textbox_threading.setText("5")
+        self.textbox_threading.setToolTip("How many simultaneous downloads you want.")
+        self.grid_layout.addWidget(self.textbox_threading, 4, 2, 1, 2)
+
+        # Config & Start
+
+        self.button_config = QPushButton(self)
+        self.button_config.setText("Config")
+        self.button_config.setToolTip("Open the configuration.")
+        self.grid_layout.addWidget(self.button_config, 5, 0)
+
+        self.button_config.clicked.connect(self.on_config_click)
+
+        self.button_start = QPushButton(self)
+        self.button_start.setText("Start!")
+        self.button_start.setToolTip("Start the download.")
+        self.grid_layout.addWidget(self.button_start, 5, 1, 1, 3)
+
+        self.button_start.clicked.connect(self.on_start_click)
+
+    def get_config(self):
+        open_conf = False
+
+        try:
+            with open('config.json') as json_file:
+                data = json.load(json_file)
+        except:
+            open_conf = True
+
+        try:
+            self.cfg_dlfolder = data['dlfolder']
+            print(self.cfg_dlfolder)
+        except:
+            self.cfg_dlfolder = ""
+            open_conf = True
+
+        try:
+            self.cfg_profile = data['profile']
+            print(self.cfg_profile)
+        except:
+            self.cfg_profile = ""
+            open_conf = True
+
+        try:
+            self.cfg_bin = data['bin']
+            print(self.cfg_bin)
+        except:
+            self.cfg_bin = ""
+            open_conf = True
+
+        try:
+            self.cfg_ffmpeg = data['ffmpeg']
+            print(self.cfg_ffmpeg)
+        except:
+            self.cfg_ffmpeg = ""
+            open_conf = True
+
+        try:
+            self.cfg_save_folder_deutsch = data['save_deutsch']
+            print(self.cfg_save_folder_deutsch)
+        except:
+            self.cfg_save_folder_deutsch = ""
+            open_conf = True
+
+        try:
+            self.cfg_save_folder_english = data['save_english']
+            print(self.cfg_save_folder_english)
+        except:
+            self.cfg_save_folder_english = ""
+            open_conf = True
+
+        try:
+            self.cfg_save_folder_deutsch_sub = data['save_deutsch_sub']
+            print(self.cfg_save_folder_deutsch_sub)
+        except:
+            self.cfg_save_folder_deutsch_sub = ""
+            open_conf = True
+
+        if open_conf:
+            self.config_window = ConfigWindow()
+            self.config_window.show()
+
+    @pyqtSlot()
+    def textbox_change(self):
+        # TODO Save Folder Auto selection
+
+        url = self.textbox_url.text().split("/")
+
+        print(url)
+
+        if url[2] != "bs.to" and url[2] != "burningseries.co" and url[2] != "burningseries.sx" and url[2] != "burningseries.ac" and url[2] != "burningseries.vc" and url[2] != "burningseries.cx":
+            error_dialog = QMessageBox()
+            error_dialog.setIcon(QMessageBox.Critical)
+            error_dialog.setText("Invalid Website \"" + url[2] + "\". [TODO DOCS]")
+            error_dialog.setWindowTitle("Error")
+            error_dialog.exec_()
+            return
+
+        serie = ""
+        for elem in url[4].split("-"):
+            serie += elem + " "
+        serie.strip()
+
+        try:
+            staffel = url[5]
+            sprache = url[6]
+            svfolder = ""
+        except:
+            error_dialog = QMessageBox()
+            error_dialog.setIcon(QMessageBox.Critical)
+            error_dialog.setText("Language and season of the series are missing [TODO DOCS].")
+            error_dialog.setWindowTitle("Error")
+            error_dialog.exec_()
+            return
+
+        search_folder = ""
+
+        if sprache == "de":
+            # Deutsch
+            search_folder = self.cfg_save_folder_deutsch
+            cont = True
+        elif sprache == "des":
+            # Deutsch SUB
+            search_folder = self.cfg_save_folder_deutsch_sub
+            cont = True
+        elif sprache == "en":
+            # English
+            print("test1")
+            search_folder = self.cfg_save_folder_english
+            cont = True
+            print("test2")
+        else:
+            error_dialog = QMessageBox()
+            error_dialog.setIcon(QMessageBox.Critical)
+            error_dialog.setText("Language \"" + sprache + "\" not supported. [TODO DOCS]")
+            error_dialog.setWindowTitle("Error")
+            error_dialog.exec_()
+            return
+
+        try:
+            print(int(staffel))
+        except:
+            error_dialog = QMessageBox()
+            error_dialog.setIcon(QMessageBox.Critical)
+            error_dialog.setText("Invalid season \"" + staffel + "\". [TODO DOCS]")
+            error_dialog.setWindowTitle("Error")
+            error_dialog.exec_()
+            return
+
+        if cont:
+            found = False
+
+            for folder in os.listdir(search_folder):
+                #print(folder)
+
+                if str(folder.lower()) == str(serie.lower()):
+                    print(str(folder.lower()) + " = " + str(serie.lower()))
+                if str(folder.lower()) in str(serie.lower()):
+                    print("huh")
+                    print(str(folder.lower()) + " in " + str(serie.lower()))
+                if str(serie.lower()) in str(folder.lower()):
+                    print(str(serie.lower()) + " in " + str(folder.lower()))
+                if str(folder.lower()) == str(serie.lower()):
+                    print(str(folder.lower()) + " = " + str(serie.lower()))
+                if str(folder.lower()) == str(serie.lower()):
+                    print(str(folder.lower()) + " = " + str(serie.lower()))
+                if str(folder.lower()) == str(serie.lower()):
+                    print(str(folder.lower()) + " = " + str(serie.lower()))
+
+                #print(serie)
+
+                if str(folder.lower()) == str(serie.lower()) or str(folder.lower()) in str(serie.lower()) or str(serie.lower()) in str(folder.lower()) or serie.lower().find(str(folder.lower())) != -1 or folder.lower().find(str(serie.lower())) != -1:
+                    svfolder = folder
+                    for folder2 in os.listdir(os.path.join(search_folder, svfolder)):
+                        if str(staffel) in folder2:
+                            found = True
+                            svfolder = os.path.join(svfolder, folder2)
+                            break
+                    break
+
+
+            if found:
+                print(svfolder)
+                print(serie.lower())
+                self.button_save_folder.setText(os.path.join(search_folder, svfolder))
+            else:
+                print("Not found")
+
+
+
+    @pyqtSlot()
+    def on_save_folder_click(self):
+        print("Save Folder clicked")
+
+        dialog = QFileDialog(self)
+        dialog.setWindowTitle('Open Save Folder')
+        dialog.setDirectory(self.image_folder)
+        dialog.setFileMode(QFileDialog.DirectoryOnly)
+        if dialog.exec_() == QDialog.Accepted:
+            file_full_path = str(dialog.selectedFiles()[0])
+            print(file_full_path)
+            self.button_save_folder.setText(file_full_path)
+        else:
+            return None
+
+    @pyqtSlot()
+    def on_config_click(self):
+        print("Config clicked")
+
+        self.config_window = ConfigWindow()
+        self.config_window.show()
+
+    def on_start_click(self):
+        print("Start clicked")
+
+        self.get_config()
+
+        thread = threading.Thread(target=self.start)
+        thread.start()
 
     def start_log(self):
         now = datetime.now()
@@ -38,203 +356,114 @@ class Win1:
         file.write(message + "\n")
         file.close()
 
-    def set_geo(self):
-        self.master.geometry("425x321")
-        self.master.resizable(0, 0)
-
-    def get_config(self):
-        my_file = Path("./config.json")
-        if my_file.is_file():
-            print("INFO: Config File found.")
-            # file exists
-
-            with open("config.json") as json_data_file:
-
-                try:
-                    data = json.load(json_data_file)
-                    self.dlfolder = data['dlfolder']
-                    self.profilefolder = data['profile']
-                    self.binfile = data['bin']
-
-                    self.counter = 0
-                    for file in os.listdir(self.dlfolder):
-                        self.counter += 1
-
-                    self.entry_already_var.set(self.counter)
-                except:
-                    print("ERROR: Invalid Config File. Please create a new one with the Program.")
-                    self.new_window(Win2)
-
-
-
-        else:
-            print("WARNING: No Config File found.")
-
-            self.new_window(Win2)
-
-    def browse_savefolder(self):
-        self.save_folder = filedialog.askdirectory()
-        self.button_save_var.set(self.save_folder)
-        print("INFO: Save Folder selected: " + self.save_folder)
-
-    def show_widgets(self):
-        self.frame = Frame(self.master)
-        self.frame.grid(row=0, column=0)
-
-        self.frame2 = Frame(self.master)
-        self.frame2.grid(row=1, column=0)
-
-        self.master.title("BS Downloader GUI v2.3.3")
-
-        self.label_url = Label(self.frame, text="BS Url: ")
-        self.label_url.grid(row=0, column=0)
-
-        self.entry_url = Entry(self.frame, width=50)
-        self.entry_url.grid(row=0, column=1, sticky=W)
-
-        self.label_save = Label(self.frame, text="Save Folder: ")
-        self.label_save.grid(row=1, column=0)
-
-        self.button_save_var = StringVar()
-        self.button_save = Button(self.frame, textvariable=self.button_save_var, command=self.browse_savefolder, width=42)
-        self.button_save.grid(row=1, column=1, sticky=W)
-        self.button_save_var.set("Browse...")
-
-        self.button_already = Button(self.frame, text="Existing Downloads: ", command=self.open_dir)
-        self.button_already.grid(row=2, column=0)
-
-        self.entry_already_var = StringVar()
-        self.entry_already = Entry(self.frame, textvariable=self.entry_already_var, width=10, justify="center")
-        self.entry_already.grid(row=2, column=1, sticky=W)
-
-        self.label_max = Label(self.frame, text="Limit: ")
-        self.label_max.grid(row=3, column=0)
-
-        self.entry_max_var = StringVar()
-        self.entry_max = Entry(self.frame, textvariable=self.entry_max_var, width=10, justify="center")
-        self.entry_max.grid(row=3, column=1, sticky=W)
-        self.entry_max_var.set(0)
-
-        self.label_pref = Label(self.frame, text="Preferred Platform: ")
-        self.label_pref.grid(row=4, column=0)
-
-        self.radio_pref_var = StringVar()
-
-        self.radio_pref_vivo = Radiobutton(self.frame, text="vivo", variable=self.radio_pref_var, value="vivo")
-        self.radio_pref_vivo.grid(row=4, column=1, sticky=W)
-        self.radio_pref_streamtape = Radiobutton(self.frame, text="streamtape", variable=self.radio_pref_var, value="streamtape")
-        self.radio_pref_streamtape.grid(row=5, column=1, sticky=W)
-        self.radio_pref_voe = Radiobutton(self.frame, text="voe (can't play video on link)", variable=self.radio_pref_var, value="voe", state=DISABLED)
-        self.radio_pref_voe.grid(row=6, column=1, sticky=W)
-        self.radio_pref_vidoza = Radiobutton(self.frame, text="vidoza", variable=self.radio_pref_var, value="vidoza")
-        self.radio_pref_vidoza.grid(row=7, column=1, sticky=W)
-        self.radio_pref_mixdrop = Radiobutton(self.frame, text="mixdrop (uses m3u8 streaming)", variable=self.radio_pref_var, value="mixdrop", state=DISABLED)
-        self.radio_pref_mixdrop.grid(row=8, column=1, sticky=W)
-        self.radio_pref_playtube = Radiobutton(self.frame, text="playtube (uses m3u8 streaming)", variable=self.radio_pref_var, value="playtube", state=DISABLED)
-        self.radio_pref_playtube.grid(row=9, column=1, sticky=W)
-        self.radio_pref_upstream = Radiobutton(self.frame, text="upstream (doesn't allow direct access)", variable=self.radio_pref_var, value="upstream", state=DISABLED)
-        self.radio_pref_upstream.grid(row=10, column=1, sticky=W)
-        self.radio_pref_vidlox = Radiobutton(self.frame, text="vidlox (uses m3u8 streaming)", variable=self.radio_pref_var, value="vidlox", state=DISABLED)
-        self.radio_pref_vidlox.grid(row=11, column=1, sticky=W)
-        self.radio_pref_vivo.select()
-
-        self.button_start_var = StringVar()
-        self.button_start = Button(self.frame, textvariable=self.button_start_var, command=self.start, width=42,bg="lightgreen")
-        self.button_start.grid(row=12, column=1)
-        self.button_start_var.set("Start!")
-
-        self.button1 = Button(self.frame, text="Config", command=lambda: self.new_window(Win2), bg="orange")
-        self.button1.grid(row=12, column=0)
-
-    def open_dir(self):
-        os.system("start " + self.dlfolder)
-
     def start(self):
-        self.start_log()
-        self.write_log("INFO: Starting the Webscraper...")
+        DLFOLDER = self.cfg_dlfolder
+        PROFILEFOLDER = self.cfg_profile
+        OPERABINEXE = self.cfg_bin
+        WEBSITE = self.textbox_url.text()
+        SAVEDIR = self.button_save_folder.text()
+        FROM = self.textbox_download_from.text()
+        TO = self.textbox_download_to.text()
+        if self.checkbox_threading.checkState() == 0:
+            THREADING = "0"
+        else:
+            THREADING = str(self.textbox_threading.text())
 
-        execute = True
-
-        # The profile where I enabled the VPN previously using the GUI.
-        OPERA_DLFOLDER = self.dlfolder
-        if OPERA_DLFOLDER == "" or OPERA_DLFOLDER == "Browse...":
-            self.write_log("ERROR: Opera Download Folder was not specified: " + OPERA_DLFOLDER)
-            execute = False
-        else:
-            self.write_log("INFO: Opera Download Folder: " + OPERA_DLFOLDER)
-        OPERA_PROFILE = self.profilefolder
-        if OPERA_PROFILE == "" or OPERA_PROFILE == "Browse...":
-            self.write_log("ERROR: Opera Profile Folder was not specified: " + OPERA_PROFILE)
-            execute = False
-        else:
-            self.write_log("INFO: Opera Profile Folder: " + OPERA_PROFILE)
-        OPERA_BIN = self.binfile
-        if OPERA_BIN == "" or OPERA_BIN == "Browse...":
-            self.write_log("ERROR: Opera Binary EXE File was not specified: " + OPERA_BIN)
-            execute = False
-        else:
-            self.write_log("INFO: Opera Binary EXE File: " + OPERA_BIN)
-        website = self.entry_url.get()
-        if website == "":
-            self.write_log("ERROR: Website was not specified: " + website)
-            execute = False
-        else:
-            self.write_log("INFO: Website: " + website)
-        save_dir = self.button_save_var.get()
-        if save_dir == "" or save_dir == "Browse...":
-            self.write_log("ERROR: Save Folder was not specified: " + save_dir)
-            execute = False
-        else:
-            self.write_log("INFO: Save Folder: " + OPERA_BIN)
-        already_exist = self.entry_already_var.get()
+        if DLFOLDER == "" or DLFOLDER == "Browse...":
+            msg = QMessageBox()
+            msg.setWindowTitle("Error")
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("The Opera Download Folder was not specified. Please check your config.")
+            x = msg.exec_()
+            return
+        if PROFILEFOLDER == "" or PROFILEFOLDER == "Browse...":
+            msg = QMessageBox()
+            msg.setWindowTitle("Error")
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("The Opera Profile Folder was not specified. Please check your config.")
+            x = msg.exec_()
+            return
+        if OPERABINEXE == "" or OPERABINEXE == "Browse...":
+            msg = QMessageBox()
+            msg.setWindowTitle("Error")
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("The Opera Bin exe was not specified. Please check your config.")
+            x = msg.exec_()
+            return
+        website_test = WEBSITE.split("/")
+        if WEBSITE == "" or website_test[2] != "bs.to":
+            msg = QMessageBox()
+            msg.setWindowTitle("Error")
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("The Website is invalid or was not specified. Please enter a valid url.")
+            x = msg.exec_()
+            return
+        if SAVEDIR == "" or SAVEDIR == "Browse...":
+            msg = QMessageBox()
+            msg.setWindowTitle("Error")
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("The Save Direcotry is invalid or was not specified.")
+            x = msg.exec_()
+            return
         try:
-            already_exist = int(self.entry_already_var.get())
+            if FROM != "":
+                FROM = int(FROM)
         except:
-            pass
-        if already_exist == "":
-            self.write_log("ERROR: It's not specified, how many files already exist: " + str(already_exist))
-            execute = False
-        elif type(already_exist) is not int:
-            self.write_log("ERROR: You didn't enter a number: " + str(already_exist))
-            execute = False
-        else:
-            self.write_log("INFO: Files that already exist: " + str(already_exist))
+            msg = QMessageBox()
+            msg.setWindowTitle("Error")
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("From is invalid or was not specified.")
+            x = msg.exec_()
+            return
         try:
-            maximum = int(self.entry_max_var.get())
+            if TO != "":
+                TO = int(TO)
         except:
-            maximum = self.entry_max_var.get()
-            pass
-        if type(maximum) is not int:
-            self.write_log("ERROR: You didn't enter a number: " + str(maximum))
-            execute = False
-        else:
-            self.write_log("INFO: Limit: " + str(maximum))
+            msg = QMessageBox()
+            msg.setWindowTitle("Error")
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("To is invalid or was not specified.")
+            x = msg.exec_()
+            return
 
-        preferred_website = self.radio_pref_var.get()
+        PREFERRED_PLATFORM = self.combobox_preferred_platform.currentText()
+        print(PREFERRED_PLATFORM)
 
-        if execute:
-            opera_profile = OPERA_PROFILE
-            options = webdriver.ChromeOptions()
-            options.add_argument('user-data-dir=' + opera_profile)
-            options.add_argument("disable-blink-features=AutomationControlled")
-            options._binary_location = OPERA_BIN
-            driver = Opera(executable_path='./operadriver.exe', options=options)
+        caps = DesiredCapabilities.OPERA
+        caps['goog:loggingPrefs'] = {'performance': 'ALL'}
+        options = webdriver.ChromeOptions()
+        options.add_argument('user-data-dir=' + PROFILEFOLDER)
+        options.add_argument("disable-blink-features=AutomationControlled")
+        options._binary_location = OPERABINEXE
+        driver = Opera(executable_path='./operadriver.exe', options=options, desired_capabilities=caps)
 
-            driver.get(website)
+        driver.get(WEBSITE)
 
-            loop = True
-            while loop:
-                try:
-                    table = driver.find_element_by_xpath('//*[@id="root"]/section/table')
-                    loop = False
-                except:
-                    pass
+        loop = True
+        while loop:
+            try:
+                table = driver.find_element_by_xpath('//*[@id="root"]/section/table')
+                loop = False
+            except:
+                sleep(1)
+                pass
 
-            tr_list = table.find_elements_by_tag_name('tr')
+        tr_list = table.find_elements_by_tag_name('tr')
 
-            folgen_arr = []
+        folgen_array = []
 
-            for entry in tr_list:
+        counter = 1
+        for entry in tr_list:
+            if not "disabled" in entry.get_attribute("class"):
+                if FROM != "":
+                    if counter < FROM:
+                        counter += 1
+                        continue
+                if TO != "":
+                    if counter > TO:
+                        counter += 1
+                        continue
+                counter += 1
                 folge_link = entry.find_elements_by_tag_name('a')[0].get_attribute('href')
                 folge_nbr = entry.find_elements_by_tag_name('a')[0].text
                 folge_name = entry.find_elements_by_tag_name('a')[1].text
@@ -248,234 +477,294 @@ class Win1:
                 folge_name = folge_name.replace(">", "")
                 folge_name = folge_name.replace("|", "")
 
-                tmpstr = ""
+                folgen_array.append([folge_link, folge_nbr, folge_name, ""])
 
-                flnbrle = 4 - len(folge_nbr)
-                for i in range(flnbrle):
-                    tmpstr += "0"
+        title_list = []
+        folge_counter = 0
 
-                tmpstr += folge_nbr
-                folge_nbr = tmpstr
+        for file in os.listdir(DLFOLDER):
+            ending = file.rsplit(".")[-1]
+            if ending == "opdownload":
+                file = file[0:-11]
+            if file in title_list:
+                continue
+            else:
+                title_list.append(file)
 
-                folgen_arr.append([folge_link, folge_nbr, folge_name, ""])
+        for folge in folgen_array:
+            driver.get(folge[0])
 
-            title_list = []
+            str_services_ul = ""
+            str_services_ul_2 = ""
 
-            if maximum != 0:
-                folgen_arr_temp = folgen_arr.copy()
+            loop = True
+            while loop:
+                try:
+                    str_services_ul = driver.find_element_by_xpath('//*[@id="root"]/section/ul[1]')
+                    str_services_ul_2 = driver.find_element_by_xpath('//*[@id="root"]/section/ul[2]')
+                    loop = False
+                except:
+                    pass
 
-                folgen_arr = []
+            str_services_list = str_services_ul.find_elements_by_tag_name('a')
+            str_services_list2 = str_services_ul_2.find_elements_by_tag_name('a')
 
-                for i in range(0, maximum):
-                    folgen_arr.append(folgen_arr_temp[i])
+            counter = 0
+            for element in str_services_list:
+                str_services_list[counter] = element.text.lower()
+                counter += 1
 
-            folge_gesamt = 0
-            for folge in folgen_arr:
-                folge_gesamt += 1
+            counter = 0
+            for element in str_services_list2:
+                str_services_list2[counter] = element.text.lower()
+                counter += 1
 
-            folge_counter = 0
+            found = False
+            found2 = False
 
-            for folge in folgen_arr:
-                if folge_counter < already_exist:
-                    for file in os.listdir(OPERA_DLFOLDER):
-                        if file in title_list:
-                            continue
-                        else:
-                            folgen_arr[folge_counter][3] = file
-                            title_list.append(file)
-                            break
-                    folge_counter += 1
-                    continue
-
-                driver.get(folge[0])
-
-                str_services_ul = ""
-                str_services_ul_2 = ""
-
-                loop = True
-                while loop:
-                    try:
-                        str_services_ul = driver.find_element_by_xpath('//*[@id="root"]/section/ul[1]')
-                        str_services_ul_2 = driver.find_element_by_xpath('//*[@id="root"]/section/ul[2]')
-                        loop = False
-                    except:
-                        pass
-
-                str_services_list = str_services_ul.find_elements_by_tag_name('a')
-                str_services_list2 = str_services_ul_2.find_elements_by_tag_name('a')
-
-                counter = 0
-                for element in str_services_list:
-                    str_services_list[counter] = element.text.lower()
+            counter = 0
+            for element in str_services_list:
+                if element.lower() == PREFERRED_PLATFORM.lower():
+                    found = True
                     counter += 1
+                    break
+                counter += 1
 
+            if not found:
                 counter = 0
                 for element in str_services_list2:
-                    str_services_list2[counter] = element.text.lower()
-                    counter += 1
-
-                found = False
-                found2 = False
-
-                counter = 0
-                for element in str_services_list:
-                    if element.lower() == preferred_website:
-                        found = True
+                    if element.lower() == PREFERRED_PLATFORM.lower():
+                        found2 = True
                         counter += 1
                         break
                     counter += 1
 
-                if not found:
-                    counter = 0
-                    for element in str_services_list2:
-                        if element.lower() == preferred_website:
-                            found2 = True
-                            counter += 1
-                            break
-                        counter += 1
+            if not found and not found2:
+                counter = 1
 
-                if not found and not found2:
-                    counter = 1
+            if found and counter != 1:
+                driver.find_element_by_xpath('//*[@id="root"]/section/ul[1]/li[' + str(counter) + ']/a').click()
 
-                if found and counter != 1:
-                    driver.find_element_by_xpath('//*[@id="root"]/section/ul[1]/li[' + str(counter) + ']/a').click()
+            if found2:
+                driver.find_element_by_xpath('//*[@id="root"]/section/ul[2]/li[' + str(counter) + ']/a').click()
 
-                if found2:
-                    driver.find_element_by_xpath('//*[@id="root"]/section/ul[2]/li[' + str(counter) + ']/a').click()
+            loop = True
+            while loop:
+                try:
+                    driver.find_element_by_xpath('//*[@id="root"]/section/div[8]/div[1]').click()
+                    loop = False
+                except:
+                    pass
 
+            loop = True
+            msg_send = False
+            sleep(1)
+            while loop:
+                try:
+                    vscheck = driver.find_element_by_xpath("/html/body/div[4]")
+                    if "visible" in vscheck.get_attribute("style"):
+                        if not msg_send:
+                            self.write_log("INFO: Captcha found, Human needed O.O")
+                            msg_send = True
+                    else:
+                        self.write_log("INFO: Captcha solved. Good job Human :)")
+                        loop = False
+                except:
+                    pass
+
+            video_mode = driver.find_element_by_xpath('//*[@id="root"]/section/ul[1]/li[' + str(counter) + ']/a').text.lower()
+
+            dnl_link = ""
+
+            filecounter = 0
+            for file in os.listdir(DLFOLDER):
+                filecounter += 1
+
+            if video_mode == "vivo":
                 loop = True
                 while loop:
                     try:
-                        driver.find_element_by_xpath('//*[@id="root"]/section/div[8]/div[1]').click()
+                        driver.get(
+                            driver.find_element_by_xpath('//*[@id="root"]/section/div[8]/a').get_attribute('href'))
+                        loop = False
+                    except:
+                        pass
+                dnl_link = driver.find_element_by_tag_name('source').get_attribute('src')
+                driver.get(dnl_link)
+            elif video_mode == "sendfox":
+                loop = True
+                while loop:
+                    try:
+                        driver.get(
+                            driver.find_element_by_xpath('//*[@id="root"]/section/div[8]/a').get_attribute('href'))
+                        loop = False
+                    except:
+                        pass
+                loop = True
+
+
+                while loop:
+                    try:
+                        driver.find_element_by_xpath('//*[@id="vjsplayer"]/button/span[1]').click()
+                        loop = False
+                    except:
+                        pass
+                loop = True
+                while loop:
+                    try:
+                        driver.find_element_by_xpath('//*[@id="vjsplayer"]/div[4]').click()
                         loop = False
                     except:
                         pass
 
+                def process_browser_log_entry(entry):
+                    response = json.loads(entry['message'])['message']
+                    return response
+
+                browser_log = driver.get_log('performance')
+                events = [process_browser_log_entry(entry) for entry in browser_log]
+                events = [event for event in events if 'Network.response' in event['method']]
+
+                m3u8 = ""
+
+                for elem in events:
+                    try:
+                        if str(elem['params']['response']['url']).endswith('index-v1-a1.m3u8'):
+                            m3u8 = str(elem['params']['response']['url']).replace("'", "")
+                            break
+                    except:
+                        continue
+
+
+                ffmpeg = self.cfg_ffmpeg
+                cmd = ffmpeg + " -i " + m3u8 + " -vcodec copy -acodec copy \"" + os.path.join(DLFOLDER , str(folgen_array[folge_counter][1]) + ".mp4\"")
+
+                print(THREADING)
+
+                if THREADING == "0":
+                    self.write_log("Starting FFMPEG Download via \"" + str(cmd) + "\"")
+                    os.system(cmd)
+                else:
+                    loop = True
+                    while loop:
+
+                        self.thread_counter = 0
+
+                        for file in os.listdir(DLFOLDER):
+                            try:
+                                os.rename(os.path.join(DLFOLDER, file), os.path.join(DLFOLDER, file))
+                            except:
+                                self.thread_counter += 1
+
+                        if self.thread_counter < int(THREADING):
+                            self.write_log(
+                                "----------------------------------Starting Thread----------------------------------")
+                            ffmpeg_thread = threading.Thread(target=self.ffmpeg_download, args=(cmd,))
+                            ffmpeg_thread.start()
+                            self.write_log("----------------------------------Thread Started----------------------------------")
+                            loop = False
+                        else:
+                            self.write_log("Too many threads running. Sleeping 5 Seconds. (" + str(self.thread_counter) + "/" + THREADING + ")")
+                            sleep(5)
+
+
+
+
+            elif video_mode == "streamtape":
                 loop = True
-                msg_send = False
+                while loop:
+                    try:
+                        driver.switch_to.frame(driver.find_element_by_xpath('//*[@id="root"]/section/div[8]/iframe'))
+                        loop = False
+                    except:
+                        pass
+                loop = True
                 sleep(1)
                 while loop:
                     try:
-                        vscheck = driver.find_element_by_xpath("/html/body/div[4]")
-                        if "visible" in vscheck.get_attribute("style"):
-                            if not msg_send:
-                                self.write_log("INFO: Captcha found, Human needed O.O")
-                                msg_send = True
-                        else:
-                            self.write_log("INFO: Captcha solved. Good job Human :)")
-                            loop = False
+                        driver.find_element_by_xpath('/html/body/div[2]/div[1]').click()
+                    except:
+                        loop = False
+                loop = True
+                while loop:
+                    try:
+                        driver.find_element_by_xpath('/html/body/div[2]/div[2]/button').click()
+                        loop = False
                     except:
                         pass
-
-                video_mode = driver.find_element_by_xpath('//*[@id="root"]/section/ul[1]/li[' + str(counter) + ']/a').text.lower()
-
-                dnl_link = ""
-
-                if video_mode == "vivo":
-                    loop = True
-                    while loop:
-                        try:
-                            driver.get(driver.find_element_by_xpath('//*[@id="root"]/section/div[8]/a').get_attribute('href'))
-                            loop = False
-                        except:
-                            pass
-                    dnl_link = driver.find_element_by_tag_name('source').get_attribute('src')
-                elif video_mode == "streamtape":
-                    loop = True
-                    while loop:
-                        try:
-                            driver.switch_to.frame(driver.find_element_by_xpath('//*[@id="root"]/section/div[8]/iframe'))
-                            loop = False
-                        except:
-                            pass
-                    loop = True
-                    sleep(1)
-                    while loop:
-                        try:
-                            driver.find_element_by_xpath('/html/body/div[2]/div[1]').click()
-                        except:
-                            loop = False
-                    loop = True
-                    while loop:
-                        try:
-                            driver.find_element_by_xpath('/html/body/div[2]/div[2]/button').click()
-                            loop = False
-                        except:
-                            pass
-                    driver.find_element_by_xpath('//*[@id="mainvideo"]').click()
-                    dnl_link = driver.find_element_by_xpath('//*[@id="mainvideo"]').get_attribute('src')
-                    driver.switch_to.default_content()
-                elif video_mode == "vidoza":
-                    loop = True
-                    while loop:
-                        try:
-                            driver.switch_to.frame(driver.find_element_by_xpath('//*[@id="root"]/section/div[8]/iframe'))
-                            loop = False
-                        except:
-                            pass
-                    loop = True
-                    while loop:
-                        try:
-                            driver.find_element_by_xpath('//*[@id="vplayer"]/div[1]').click()
-                            loop = False
-                        except:
-                            pass
-                    loop = True
-                    while loop:
-                        try:
-                            driver.find_element_by_xpath('//*[@id="player"]/button').click()
-                            loop = False
-                        except:
-                            pass
-                    loop = True
-                    while loop:
-                        try:
-                            dnl_link = driver.find_element_by_xpath('//*[@id="player_html5_api"]').get_attribute('src')
-                            loop = False
-                        except:
-                            pass
-                    driver.switch_to.default_content()
-
-                filecounter = 0
-                for file in os.listdir(OPERA_DLFOLDER):
-                    filecounter += 1
-
+                driver.find_element_by_xpath('//*[@id="mainvideo"]').click()
+                dnl_link = driver.find_element_by_xpath('//*[@id="mainvideo"]').get_attribute('src')
+                driver.switch_to.default_content()
+                driver.get(dnl_link)
+            elif video_mode == "vidoza":
+                loop = True
+                while loop:
+                    try:
+                        driver.switch_to.frame(driver.find_element_by_xpath('//*[@id="root"]/section/div[8]/iframe'))
+                        loop = False
+                    except:
+                        pass
+                loop = True
+                while loop:
+                    try:
+                        driver.find_element_by_xpath('//*[@id="vplayer"]/div[1]').click()
+                        loop = False
+                    except:
+                        pass
+                loop = True
+                while loop:
+                    try:
+                        driver.find_element_by_xpath('//*[@id="player"]/button').click()
+                        loop = False
+                    except:
+                        pass
+                loop = True
+                while loop:
+                    try:
+                        dnl_link = driver.find_element_by_xpath('//*[@id="player_html5_api"]').get_attribute('src')
+                        loop = False
+                    except:
+                        pass
+                driver.switch_to.default_content()
                 driver.get(dnl_link)
 
-                filecounter_new = filecounter
-                while filecounter >= filecounter_new:
-                    filecounter_new = 0
-                    for file in os.listdir(OPERA_DLFOLDER):
-                        filecounter_new += 1
+            print("done")
 
-                self.write_log("INFO: New File found.")
+            filecounter_new = filecounter
+            while filecounter >= filecounter_new:
+                filecounter_new = 0
+                for file in os.listdir(DLFOLDER):
+                    filecounter_new += 1
 
-                sleep(1)
+            self.write_log("INFO: New File found.")
 
-                for file in os.listdir(OPERA_DLFOLDER):
-                    ending = file.rsplit(".")[-1]
-                    if ending == "opdownload":
-                        file = file[0:-11]
-                    if file in title_list:
-                        continue
-                    else:
-                        folgen_arr[folge_counter][3] = file
-                        title_list.append(file)
-                        break
+            sleep(1)
 
-                folge_counter += 1
+            for file in os.listdir(DLFOLDER):
+                ending = file.rsplit(".")[-1]
+                if ending == "opdownload":
+                    file = file[0:-11]
+                if file in title_list:
+                    continue
+                else:
+                    title_list.append(file)
+                    folgen_array[folge_counter][3] = file
 
-                for file in os.listdir(OPERA_DLFOLDER):
-                    ending = file.rsplit(".")[-1]
-                    if ending == "opdownload":
-                        continue
-                    elif ending == "mp4":
-                        folgen_arr_counter = 0
-                        for folge in folgen_arr:
-                            if folge[3] == file:
-                                os.rename(os.path.join(OPERA_DLFOLDER, file), os.path.join(OPERA_DLFOLDER, folge[1] + ".mp4"))
+            folge_counter += 1
+
+            for file in os.listdir(DLFOLDER):
+                ending = file.rsplit(".")[-1]
+                if ending == "opdownload":
+                    continue
+                elif ending == "mp4":
+                    folgen_arr_counter = 0
+                    for folge in folgen_array:
+                        if folge[3] == file:
+                            try:
+                                os.rename(os.path.join(DLFOLDER, file),
+                                          os.path.join(DLFOLDER, folge[1] + ".mp4"))
                                 self.write_log("INFO: Renamed \"" + file + "\" to \"" + folge[1] + "\"")
-                                folgen_arr[folgen_arr_counter][3] = folge[1] + ".mp4"
+                                folgen_array[folgen_arr_counter][3] = folge[1] + ".mp4"
                                 tl_counter = 0
                                 for dings in title_list:
                                     if dings == file:
@@ -483,175 +772,481 @@ class Win1:
                                         break
                                     tl_counter += 1
                                 break
-                            folgen_arr_counter += 1
-
-                self.write_log("INFO: List of series: ")
-                self.write_log(folgen_arr)
-                self.write_log("INFO: List of downloaded series: ")
-                self.write_log(title_list)
-
-            downloading = True
-            meldung = False
-            while downloading:
-                downloading = False
-                for file in os.listdir(OPERA_DLFOLDER):
-                    if file.rsplit(".")[-1] == "opdownload":
-                        downloading = True
-                if downloading:
-                    if not meldung:
-                        self.write_log("WARNING: At least one file is still downloading, The Program will wait before moving the files...")
-                        meldung = True
-
-            sleep(1)
-
-            for file in os.listdir(OPERA_DLFOLDER):
-                ending = file.rsplit(".")[-1]
-                if ending == "opdownload":
-                    continue
-                elif ending == "mp4":
-                    folgen_arr_counter = 0
-                    for folge in folgen_arr:
-                        if folge[3] == file:
-                            os.rename(os.path.join(OPERA_DLFOLDER, file),
-                                      os.path.join(OPERA_DLFOLDER, folge[1] + ".mp4"))
-                            self.write_log("INFO: Renamed \"" + file + "\" to \"" + folge[1] + "\"")
-                            folgen_arr[folgen_arr_counter][3] = folge[1] + ".mp4"
-                            tl_counter = 0
-                            for dings in title_list:
-                                if dings == file:
-                                    title_list[tl_counter] = folge[1] + ".mp4"
-                                    break
-                                tl_counter += 1
-                            break
+                            except:
+                                pass
                         folgen_arr_counter += 1
 
-            sleep(1)
+            self.write_log("INFO: List of series: ")
+            self.write_log(folgen_array)
+            self.write_log("INFO: List of downloaded series: ")
+            self.write_log(title_list)
 
-            self.write_log("INFO: Moving files to the destination.")
+        downloading = True
+        meldung = False
+        while downloading:
+            downloading = False
+            for file in os.listdir(DLFOLDER):
+                if file.rsplit(".")[-1] == "opdownload":
+                    downloading = True
+                else:
+                    try:
+                        os.rename(os.path.join(DLFOLDER, file), os.path.join(DLFOLDER, file))
+                    except:
+                        downloading = True
+            if downloading:
+                if not meldung:
+                    self.write_log(
+                        "WARNING: At least one file is still downloading, The Program will wait before moving the files...")
+                    meldung = True
 
-            for file in os.listdir(OPERA_DLFOLDER):
-                for folge in folgen_arr:
+        sleep(1)
+
+        for file in os.listdir(DLFOLDER):
+            ending = file.rsplit(".")[-1]
+            if ending == "opdownload":
+                continue
+            elif ending == "mp4":
+                folgen_arr_counter = 0
+                for folge in folgen_array:
                     if folge[3] == file:
-                        # new_name = folge[1] + "_" + folge[2] + ".mp4"
-                        new_name = folge[1].split(".")
-                        new_name = int(new_name[0])
-                        new_name = str(new_name) + ".mp4"
-                        os.rename(os.path.join(OPERA_DLFOLDER, file), os.path.join(OPERA_DLFOLDER, new_name))
-                        self.write_log("INFO: Renamed \"" + file + "\" to \"" + new_name + "\"")
+                        os.rename(os.path.join(DLFOLDER, file),
+                                  os.path.join(DLFOLDER, folge[1] + ".mp4"))
+                        self.write_log("INFO: Renamed \"" + file + "\" to \"" + folge[1] + "\"")
+                        folgen_array[folgen_arr_counter][3] = folge[1] + ".mp4"
+                        tl_counter = 0
+                        for dings in title_list:
+                            if dings == file:
+                                title_list[tl_counter] = folge[1] + ".mp4"
+                                break
+                            tl_counter += 1
+                        break
+                    folgen_arr_counter += 1
 
-            for file in os.listdir(OPERA_DLFOLDER):
-                shutil.move(os.path.join(OPERA_DLFOLDER, file), os.path.join(save_dir, file))
+        sleep(1)
 
-            driver.quit()
+        self.write_log("INFO: Moving files to the destination.")
 
-            self.write_log("INFO: Successfully moved all files. Scraping Finished.")
-            self.button_start_var.set("Success!")
+        for file in os.listdir(DLFOLDER):
+            for folge in folgen_array:
+                if folge[3] == file:
+                    # new_name = folge[1] + "_" + folge[2] + ".mp4"
+                    new_name = folge[1].split(".")
+                    new_name = int(new_name[0])
+                    new_name = str(new_name) + ".mp4"
+                    os.rename(os.path.join(DLFOLDER, file), os.path.join(DLFOLDER, new_name))
+                    self.write_log("INFO: Renamed \"" + file + "\" to \"" + new_name + "\"")
+
+        for file in os.listdir(DLFOLDER):
+            shutil.move(os.path.join(DLFOLDER, file), os.path.join(SAVEDIR, file))
+
+        driver.quit()
+
+        self.write_log("INFO: Successfully moved all files. Scraping Finished.")
+
+
+        msg = QMessageBox()
+        msg.setWindowTitle("Info")
+        msg.setIcon(QMessageBox.Information)
+        msg.setText("Successfully moved all files. Scraping Finished..")
+        x = msg.exec_()
+
+    def ffmpeg_download(self, cmd):
+        self.write_log("Starting FFMPEG Download via \"" + str(cmd) + "\"")
+        os.system(cmd)
+
+
+class ConfigWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.config_grid_layout = QGridLayout()
+        self.setWindowTitle("Config")
+        self.setLayout(self.config_grid_layout)
+
+        # Opera Download
+
+        try:
+            with open('config.json') as json_file:
+                data = json.load(json_file)
+        except:
+            pass
+
+        try:
+            self.cfg_dlfolder = data['dlfolder']
+            print(self.cfg_dlfolder)
+        except:
+            self.cfg_dlfolder = ""
+
+        try:
+            self.cfg_profile = data['profile']
+            print(self.cfg_profile)
+        except:
+            self.cfg_profile = ""
+
+        try:
+            self.cfg_bin = data['bin']
+            print(self.cfg_bin)
+        except:
+            self.cfg_bin = ""
+            pass
+
+        try:
+            self.cfg_ffmpeg = data['ffmpeg']
+            print(self.cfg_ffmpeg)
+        except:
+            self.cfg_ffmpeg = ""
+            pass
+
+        try:
+            self.cfg_save_folder_deutsch = data['save_deutsch']
+            print(self.cfg_save_folder_deutsch)
+        except:
+            self.cfg_save_folder_deutsch = ""
+            pass
+
+        try:
+            self.cfg_save_folder_english = data['save_english']
+            print(self.cfg_save_folder_english)
+        except:
+            self.cfg_save_folder_english = ""
+            pass
+
+        try:
+            self.cfg_save_folder_deutsch_sub = data['save_deutsch_sub']
+            print(self.cfg_save_folder_deutsch_sub)
+        except:
+            self.cfg_save_folder_deutsch_sub = ""
+            pass
+
+        self.label_opera_download_folder = QLabel(self)
+        self.label_opera_download_folder.setText("Opera Download Folder: ")
+        self.config_grid_layout.addWidget(self.label_opera_download_folder, 0, 0)
+
+        self.button_opera_download_folder = QPushButton(self)
+        if self.cfg_dlfolder != "":
+            self.button_opera_download_folder.setText(self.cfg_dlfolder)
         else:
-            self.button_start_var.set("Something's wrong I can feel it!")
+            self.button_opera_download_folder.setText("Browse...")
+            self.cfg_dlfolder = ""
+            self.button_opera_download_folder.setStyleSheet('QPushButton {color: red;}')
+        self.button_opera_download_folder.setToolTip("The Folder Opera Downloads it's files to.")
+        self.config_grid_layout.addWidget(self.button_opera_download_folder, 0, 1)
 
-    def solve_captcha(self):
-        pass
+        self.button_opera_download_folder.clicked.connect(self.button_opera_download_folder_clicked)
 
-    def new_window(self, _class):
-        self.win = Toplevel(self.master)
-        _class(self.win)
+        # Opera Profile
 
-    def close_window(self):
-        self.master.destroy()
+        self.label_opera_profile_folder = QLabel(self)
+        self.label_opera_profile_folder.setText("Opera Profile Folder: ")
+        self.config_grid_layout.addWidget(self.label_opera_profile_folder, 1, 0)
 
+        self.button_opera_profile_folder = QPushButton(self)
+        if self.cfg_profile != "":
+            self.button_opera_profile_folder.setText(self.cfg_profile)
+        else:
+            tmp_path = os.path.join(os.getenv('APPDATA'), "Opera Software\\Opera Stable")
+            if os.path.exists(tmp_path):
+                self.button_opera_profile_folder.setText(tmp_path)
+                self.cfg_profile = tmp_path
+            else:
+                self.button_opera_profile_folder.setText(os.getenv('APPDATA'))
+                self.cfg_profile = os.getenv('APPDATA')
+                self.button_opera_profile_folder.setStyleSheet('QPushButton {color: red;}')
+        self.button_opera_profile_folder.setToolTip("The Folder to your Opera Profile.")
+        self.config_grid_layout.addWidget(self.button_opera_profile_folder, 1, 1)
 
-class Win2(Win1):
+        self.button_opera_profile_folder.clicked.connect(self.button_opera_profile_folder_clicked)
 
-    def set_geo(self):
-        self.master.geometry("638x105")
-        self.master.resizable(0, 0)
-        self.master.grab_set()
+        # Opera Bin Exe
 
-    def get_config(self):
-        my_file = Path("./config.json")
-        if my_file.is_file():
-            print("INFO: Config File found.")
-            # file exists
+        self.label_opera_bin_exe = QLabel(self)
+        self.label_opera_bin_exe.setText("Opera Bin Exe: ")
+        self.config_grid_layout.addWidget(self.label_opera_bin_exe, 2, 0)
 
-            try:
-                with open("config.json") as json_data_file:
+        self.button_opera_bin_exe = QPushButton(self)
+        if self.cfg_bin != "":
+            self.button_opera_bin_exe.setText(self.cfg_bin)
+        else:
+            tmp_path = os.path.join(os.getenv('LOCALAPPDATA'), "Programs\\Opera")
+            if os.path.exists(tmp_path):
+                highest = 0
+                tmp_dir = ""
+                for file in os.listdir(tmp_path):
+                    if os.path.isdir(os.path.join(tmp_path, file)):
+                        if file[0].isdigit():
+                            print(file)
+                            tmp_nbr = file.replace(".", "")
+                            if int(tmp_nbr) > highest:
+                                tmp_dir = os.path.join(tmp_path, file)
+                self.button_opera_bin_exe.setText(os.path.join(tmp_dir, "opera.exe"))
+                self.cfg_bin = os.path.join(tmp_dir, "opera.exe")
+            else:
+                self.button_opera_bin_exe.setText(os.getenv('LOCALAPPDATA'))
+                self.cfg_bin = os.getenv('LOCALAPPDATA')
+                self.button_opera_bin_exe.setStyleSheet('QPushButton {color: red;}')
+        self.button_opera_bin_exe.setToolTip("The Folder to your opera binary .exe file.")
+        self.config_grid_layout.addWidget(self.button_opera_bin_exe, 2, 1)
 
-                    data = json.load(json_data_file)
+        self.button_opera_bin_exe.clicked.connect(self.button_opera_bin_exe_clicked)
 
-                    self.dlfolder = data['dlfolder']
-                    self.profilefolder = data['profile']
-                    self.binfile = data['bin']
+        # FFMPEG
 
-                    self.button1_save_var.set(self.dlfolder)
-                    self.button2_save_var.set(self.profilefolder)
-                    self.button3_save_var.set(self.binfile)
-            except:
-                print("ERROR: Invalid Config File. Please create a new one with the Program.")
+        self.label_ffmpeg = QLabel(self)
+        self.label_ffmpeg.setText("FFMPEG: ")
+        self.config_grid_layout.addWidget(self.label_ffmpeg, 3, 0)
 
-    def save_config(self):
-        data = {
-            "dlfolder": self.dlfolder,
-            "profile": self.profilefolder,
-            "bin": self.binfile
-        }
+        self.button_ffmpeg = QPushButton(self)
+        self.button_ffmpeg.setText(self.cfg_ffmpeg)
+        self.button_ffmpeg.setToolTip("The Path to your FFMPEG.exe.")
+        self.config_grid_layout.addWidget(self.button_ffmpeg, 3, 1)
+        self.button_ffmpeg.clicked.connect(self.button_ffmpeg_clicked)
 
-        with open("config.json", "w") as outfile:
+        # Save Folder Deutsch
+
+        self.label_save_folder_deutsch = QLabel(self)
+        self.label_save_folder_deutsch.setText("Save Folder Deutsch: ")
+        self.config_grid_layout.addWidget(self.label_save_folder_deutsch, 4, 0)
+
+        self.button_save_folder_deutsch = QPushButton(self)
+        self.button_save_folder_deutsch.setText(self.cfg_save_folder_deutsch)
+        self.button_save_folder_deutsch.setToolTip("The Path to your German Series.")
+        self.config_grid_layout.addWidget(self.button_save_folder_deutsch, 4, 1)
+        self.button_save_folder_deutsch.clicked.connect(self.button_save_folder_deutsch_clicked)
+
+        # Save Folder Deutsch SUB
+
+        self.label_save_folder_deutsch_sub = QLabel(self)
+        self.label_save_folder_deutsch_sub.setText("Save Folder Deutsch-SUB: ")
+        self.config_grid_layout.addWidget(self.label_save_folder_deutsch_sub, 5, 0)
+
+        self.button_save_folder_deutsch_sub = QPushButton(self)
+        self.button_save_folder_deutsch_sub.setText(self.cfg_save_folder_deutsch_sub)
+        self.button_save_folder_deutsch_sub.setToolTip("The Path to your German-SUB Series.")
+        self.config_grid_layout.addWidget(self.button_save_folder_deutsch_sub, 5, 1)
+        self.button_save_folder_deutsch_sub.clicked.connect(self.button_save_folder_deutsch_sub_clicked)
+
+        # Save Folder English
+
+        self.label_save_folder_english = QLabel(self)
+        self.label_save_folder_english.setText("Save Folder English: ")
+        self.config_grid_layout.addWidget(self.label_save_folder_english, 6, 0)
+
+        self.button_save_folder_english = QPushButton(self)
+        self.button_save_folder_english.setText(self.cfg_save_folder_english)
+        self.button_save_folder_english.setToolTip("The Path to your English Series.")
+        self.config_grid_layout.addWidget(self.button_save_folder_english, 6, 1)
+        self.button_save_folder_english.clicked.connect(self.button_save_folder_english_clicked)
+
+        data = {}
+
+        if os.path.exists(self.cfg_dlfolder):
+            data['dlfolder'] = self.cfg_dlfolder
+        if os.path.exists(self.cfg_profile):
+            data['profile'] = self.cfg_profile
+        if os.path.exists(self.cfg_bin):
+            data['bin'] = self.cfg_bin
+        if os.path.exists(self.cfg_ffmpeg):
+            data['ffmpeg'] = self.cfg_ffmpeg
+        if os.path.exists(self.cfg_save_folder_deutsch):
+            data['save_deutsch'] = self.cfg_save_folder_deutsch
+        if os.path.exists(self.cfg_save_folder_deutsch_sub):
+            data['save_deutsch_sub'] = self.cfg_save_folder_deutsch_sub
+        if os.path.exists(self.cfg_save_folder_english):
+            data['save_english'] = self.cfg_save_folder_english
+
+        with open('config.json', 'w') as outfile:
             json.dump(data, outfile)
 
-        self.master.destroy()
+    @pyqtSlot()
+    def button_opera_download_folder_clicked(self):
+        print("Opera Download Folder Clicked")
 
-    def browse_dlfolder(self):
-        self.dlfolder = filedialog.askdirectory()
-        self.button1_save_var.set(self.dlfolder)
-        print("INFO: Opera Download Folder selected: " + self.dlfolder)
+        dialog = QFileDialog(self)
+        dialog.setWindowTitle('Open Opera Download Folder')
+        dialog.setDirectory(os.getenv('USERPROFILE'))
+        dialog.setFileMode(QFileDialog.DirectoryOnly)
+        if dialog.exec_() == QDialog.Accepted:
+            file_full_path = str(dialog.selectedFiles()[0])
+            file_full_path = file_full_path.replace("/", "\\")
+            print(file_full_path)
+            self.button_opera_download_folder.setText(file_full_path)
 
-    def browse_profilefolder(self):
-        self.profilefolder = filedialog.askdirectory()
-        self.button2_save_var.set(self.profilefolder)
-        print("INFO: Opera Profile Folder selected: " + self.profilefolder)
+            try:
+                with open('config.json') as json_file:
+                    data = json.load(json_file)
 
-    def browse_binfile(self):
-        self.binfile = filedialog.askopenfile().name
-        self.button3_save_var.set(self.binfile)
-        print("INFO: Opera Binary EXE File selected: " + self.binfile)
+                data['dlfolder'] = file_full_path
 
-    def show_widgets(self):
-        # A frame with a button to quit the window
-        self.frame1 = Frame(self.master)
-        self.frame1.grid(row=0, column=0)
+                with open('config.json', 'w') as outfile:
+                    json.dump(data, outfile)
+            except:
+                pass
+        else:
+            return None
 
-        self.label1 = Label(self.frame1, text="Opera Download Folder: ")
-        self.label1.grid(row=0, column=0)
+    @pyqtSlot()
+    def button_opera_profile_folder_clicked(self):
+        print("Opera Profile Folder Clicked")
 
-        self.button1_save_var = StringVar()
-        self.button1 = Button(self.frame1, textvariable=self.button1_save_var, command=self.browse_dlfolder, width=70)
-        self.button1.grid(row=0, column=1)
-        self.button1_save_var.set("Browse...")
+        dialog = QFileDialog(self)
+        dialog.setWindowTitle('Open Opera Profile Folder')
+        dialog.setDirectory(os.getenv('APPDATA'))
+        dialog.setFileMode(QFileDialog.DirectoryOnly)
+        if dialog.exec_() == QDialog.Accepted:
+            file_full_path = str(dialog.selectedFiles()[0])
+            file_full_path = file_full_path.replace("/", "\\")
+            print(file_full_path)
+            self.button_opera_profile_folder.setText(file_full_path)
 
-        self.label2 = Label(self.frame1, text="Opera Profile Folder: ")
-        self.label2.grid(row=1, column=0)
+            try:
+                with open('config.json') as json_file:
+                    data = json.load(json_file)
 
-        self.button2_save_var = StringVar()
-        self.button2 = Button(self.frame1, textvariable=self.button2_save_var, command=self.browse_profilefolder,
-                              width=70)
-        self.button2.grid(row=1, column=1)
-        self.button2_save_var.set("Browse...")
+                data['profile'] = file_full_path
 
-        self.label3 = Label(self.frame1, text="Opera Bin Exe: ")
-        self.label3.grid(row=2, column=0)
+                with open('config.json', 'w') as outfile:
+                    json.dump(data, outfile)
+            except:
+                pass
+        else:
+            return None
 
-        self.button3_save_var = StringVar()
-        self.button3 = Button(self.frame1, textvariable=self.button3_save_var, command=self.browse_binfile, width=70)
-        self.button3.grid(row=2, column=1)
-        self.button3_save_var.set("Browse...")
+    @pyqtSlot()
+    def button_ffmpeg_clicked(self):
+        print("FFMPEG Clicked")
 
-        self.save_button = Button(self.frame1, text="Save & Exit", command=self.save_config, bg="lightgreen")
-        self.save_button.grid(row=3, column=1)
+        dialog = QFileDialog(self)
+        dialog.setWindowTitle('Open FFMPEG .exe')
+        dialog.setNameFilter('exe files (*.exe;)')
+        dialog.setDirectory(os.getenv('LOCALAPPDATA'))
+        dialog.setFileMode(QFileDialog.ExistingFile)
+        if dialog.exec_() == QDialog.Accepted:
+            file_full_path = str(dialog.selectedFiles()[0])
+            file_full_path = file_full_path.replace("/", "\\")
+            print(file_full_path)
+            self.button_ffmpeg.setText(file_full_path)
 
-        self.close_button = Button(self.frame1, text="Exit", command=self.close_window, bg="red")
-        self.close_button.grid(row=3, column=0)
+            try:
+                with open('config.json') as json_file:
+                    data = json.load(json_file)
+
+                data['ffmpeg'] = file_full_path
+
+                with open('config.json', 'w') as outfile:
+                    json.dump(data, outfile)
+            except:
+                pass
+        else:
+            return None
+
+    @pyqtSlot()
+    def button_save_folder_deutsch_clicked(self):
+        print("Opera Save Folder Deutsch Clicked")
+
+        dialog = QFileDialog(self)
+        dialog.setWindowTitle('Open Save Folder Deutsch')
+        dialog.setFileMode(QFileDialog.DirectoryOnly)
+        if dialog.exec_() == QDialog.Accepted:
+            file_full_path = str(dialog.selectedFiles()[0])
+            file_full_path = file_full_path.replace("/", "\\")
+            print(file_full_path)
+            self.button_save_folder_deutsch.setText(file_full_path)
+
+            try:
+                with open('config.json') as json_file:
+                    data = json.load(json_file)
+
+                data['save_deutsch'] = file_full_path
+
+                with open('config.json', 'w') as outfile:
+                    json.dump(data, outfile)
+            except:
+                pass
+        else:
+            return None
+
+    @pyqtSlot()
+    def button_save_folder_deutsch_sub_clicked(self):
+        print("Opera Save Folder Deutsch SUB Clicked")
+
+        dialog = QFileDialog(self)
+        dialog.setWindowTitle('Open Save Folder Deutsch SUB')
+        dialog.setFileMode(QFileDialog.DirectoryOnly)
+        if dialog.exec_() == QDialog.Accepted:
+            file_full_path = str(dialog.selectedFiles()[0])
+            file_full_path = file_full_path.replace("/", "\\")
+            print(file_full_path)
+            self.button_save_folder_deutsch_sub.setText(file_full_path)
+
+            try:
+                with open('config.json') as json_file:
+                    data = json.load(json_file)
+
+                data['save_deutsch_sub'] = file_full_path
+
+                with open('config.json', 'w') as outfile:
+                    json.dump(data, outfile)
+            except:
+                pass
+        else:
+            return None
+
+    def button_save_folder_english_clicked(self):
+        print("Opera Save Folder English Clicked")
+
+        dialog = QFileDialog(self)
+        dialog.setWindowTitle('Open Save Folder English')
+        dialog.setFileMode(QFileDialog.DirectoryOnly)
+        if dialog.exec_() == QDialog.Accepted:
+            file_full_path = str(dialog.selectedFiles()[0])
+            file_full_path = file_full_path.replace("/", "\\")
+            print(file_full_path)
+            self.button_save_folder_english.setText(file_full_path)
+
+            try:
+                with open('config.json') as json_file:
+                    data = json.load(json_file)
+
+                data['save_english'] = file_full_path
+
+                with open('config.json', 'w') as outfile:
+                    json.dump(data, outfile)
+            except:
+                pass
+        else:
+            return None
+
+    @pyqtSlot()
+    def button_opera_bin_exe_clicked(self):
+        print("Opera Bin Exe Clicked")
+
+        dialog = QFileDialog(self)
+        dialog.setWindowTitle('Open Opera Bin .exe')
+        dialog.setNameFilter('exe files (*.exe;)')
+        dialog.setDirectory(os.getenv('LOCALAPPDATA'))
+        dialog.setFileMode(QFileDialog.ExistingFile)
+        if dialog.exec_() == QDialog.Accepted:
+            file_full_path = str(dialog.selectedFiles()[0])
+            file_full_path = file_full_path.replace("/", "\\")
+            print(file_full_path)
+            self.button_opera_bin_exe.setText(file_full_path)
+
+            try:
+                with open('config.json') as json_file:
+                    data = json.load(json_file)
+
+                data['bin'] = file_full_path
+
+                with open('config.json', 'w') as outfile:
+                    json.dump(data, outfile)
+            except:
+                pass
+        else:
+            return None
 
 
-root = Tk()
-app = Win1(root)
-root.mainloop()
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    app.setStyle('Fusion')
+    main_window = MainWindow()
+    main_window.show()
+    sys.exit(app.exec_())
