@@ -1,11 +1,7 @@
 import json
 import os
-import re
 import shutil
 import sys
-import webbrowser
-from datetime import datetime
-from pprint import pprint
 
 from selenium import webdriver
 from seleniumrequests import Opera
@@ -13,11 +9,9 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 import threading
 from time import sleep
 
-from PyQt5.QtCore import pyqtSlot, QDir, QStandardPaths
+from PyQt5.QtCore import pyqtSlot, QDir
 from PyQt5.QtWidgets import *
 from datetime import datetime
-
-from bs4 import BeautifulSoup
 
 
 
@@ -590,7 +584,41 @@ class MainWindow(QWidget):
                     except:
                         pass
                 dnl_link = driver.find_element_by_tag_name('source').get_attribute('src')
-                driver.get(dnl_link)
+                # driver.get(dnl_link)
+
+                ffmpeg = self.cfg_ffmpeg
+                cmd = ffmpeg + " -i \"" + dnl_link + "\" -vcodec copy -acodec copy \"" + os.path.join(DLFOLDER, str(
+                    folgen_array[folge_counter][1]) + ".mp4\"")
+
+                print(THREADING)
+
+                if THREADING == "0":
+                    self.write_log("Starting FFMPEG Download via \"" + str(cmd) + "\"")
+                    os.system(cmd)
+                else:
+                    loop = True
+                    while loop:
+
+                        self.thread_counter = 0
+
+                        for file in os.listdir(DLFOLDER):
+                            try:
+                                os.rename(os.path.join(DLFOLDER, file), os.path.join(DLFOLDER, file))
+                            except:
+                                self.thread_counter += 1
+
+                        if self.thread_counter < int(THREADING):
+                            self.write_log(
+                                "----------------------------------Starting Thread----------------------------------")
+                            ffmpeg_thread = threading.Thread(target=self.ffmpeg_download, args=(cmd,))
+                            ffmpeg_thread.start()
+                            self.write_log(
+                                "----------------------------------Thread Started----------------------------------")
+                            loop = False
+                        else:
+                            self.write_log("Too many threads running. Sleeping 5 Seconds. (" + str(
+                                self.thread_counter) + "/" + THREADING + ")")
+                            sleep(5)
             elif video_mode == "sendfox":
                 loop = True
                 while loop:
@@ -635,9 +663,8 @@ class MainWindow(QWidget):
                     except:
                         continue
 
-
                 ffmpeg = self.cfg_ffmpeg
-                cmd = ffmpeg + " -i " + m3u8 + " -vcodec copy -acodec copy \"" + os.path.join(DLFOLDER , str(folgen_array[folge_counter][1]) + ".mp4\"")
+                cmd = ffmpeg + " -i \"" + m3u8 + "\" -vcodec copy -acodec copy \"" + os.path.join(DLFOLDER , str(folgen_array[folge_counter][1]) + ".mp4\"")
 
                 print(THREADING)
 
@@ -666,10 +693,6 @@ class MainWindow(QWidget):
                         else:
                             self.write_log("Too many threads running. Sleeping 5 Seconds. (" + str(self.thread_counter) + "/" + THREADING + ")")
                             sleep(5)
-
-
-
-
             elif video_mode == "streamtape":
                 loop = True
                 while loop:
@@ -695,7 +718,41 @@ class MainWindow(QWidget):
                 driver.find_element_by_xpath('//*[@id="mainvideo"]').click()
                 dnl_link = driver.find_element_by_xpath('//*[@id="mainvideo"]').get_attribute('src')
                 driver.switch_to.default_content()
-                driver.get(dnl_link)
+                # driver.get(dnl_link)
+
+                ffmpeg = self.cfg_ffmpeg
+                cmd = ffmpeg + " -i \"" + dnl_link + "\" -vcodec copy -acodec copy \"" + os.path.join(DLFOLDER, str(
+                    folgen_array[folge_counter][1]) + ".mp4\"")
+
+                print(THREADING)
+
+                if THREADING == "0":
+                    self.write_log("Starting FFMPEG Download via \"" + str(cmd) + "\"")
+                    os.system(cmd)
+                else:
+                    loop = True
+                    while loop:
+
+                        self.thread_counter = 0
+
+                        for file in os.listdir(DLFOLDER):
+                            try:
+                                os.rename(os.path.join(DLFOLDER, file), os.path.join(DLFOLDER, file))
+                            except:
+                                self.thread_counter += 1
+
+                        if self.thread_counter < int(THREADING):
+                            self.write_log(
+                                "----------------------------------Starting Thread----------------------------------")
+                            ffmpeg_thread = threading.Thread(target=self.ffmpeg_download, args=(cmd,))
+                            ffmpeg_thread.start()
+                            self.write_log(
+                                "----------------------------------Thread Started----------------------------------")
+                            loop = False
+                        else:
+                            self.write_log("Too many threads running. Sleeping 5 Seconds. (" + str(
+                                self.thread_counter) + "/" + THREADING + ")")
+                            sleep(5)
             elif video_mode == "vidoza":
                 loop = True
                 while loop:
@@ -726,7 +783,41 @@ class MainWindow(QWidget):
                     except:
                         pass
                 driver.switch_to.default_content()
-                driver.get(dnl_link)
+                # driver.get(dnl_link)
+
+                ffmpeg = self.cfg_ffmpeg
+                cmd = ffmpeg + " -i \"" + dnl_link + "\" -vcodec copy -acodec copy \"" + os.path.join(DLFOLDER, str(
+                    folgen_array[folge_counter][1]) + ".mp4\"")
+
+                print(THREADING)
+
+                if THREADING == "0":
+                    self.write_log("Starting FFMPEG Download via \"" + str(cmd) + "\"")
+                    os.system(cmd)
+                else:
+                    loop = True
+                    while loop:
+
+                        self.thread_counter = 0
+
+                        for file in os.listdir(DLFOLDER):
+                            try:
+                                os.rename(os.path.join(DLFOLDER, file), os.path.join(DLFOLDER, file))
+                            except:
+                                self.thread_counter += 1
+
+                        if self.thread_counter < int(THREADING):
+                            self.write_log(
+                                "----------------------------------Starting Thread----------------------------------")
+                            ffmpeg_thread = threading.Thread(target=self.ffmpeg_download, args=(cmd,))
+                            ffmpeg_thread.start()
+                            self.write_log(
+                                "----------------------------------Thread Started----------------------------------")
+                            loop = False
+                        else:
+                            self.write_log("Too many threads running. Sleeping 5 Seconds. (" + str(
+                                self.thread_counter) + "/" + THREADING + ")")
+                            sleep(5)
 
             print("done")
 
