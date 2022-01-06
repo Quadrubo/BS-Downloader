@@ -24,7 +24,7 @@ class MainWindow(QWidget):
 
         self.image_folder = QDir.currentPath()
 
-        self.setWindowTitle("BS Downloader v3.0.0")
+        self.setWindowTitle("BS Downloader 3.0.0-alpha.2")
         self.setLayout(self.grid_layout)
 
         # Textbox Burning Series Url
@@ -83,9 +83,9 @@ class MainWindow(QWidget):
         self.grid_layout.addWidget(self.label_preferred_platform, 3, 0)
 
         self.combobox_preferred_platform = QComboBox(self)
-        self.combobox_preferred_platform.addItem("SendFox")
         self.combobox_preferred_platform.addItem("Vivo")
         self.combobox_preferred_platform.addItem("Streamtape")
+        self.combobox_preferred_platform.addItem("Vupload")
         self.combobox_preferred_platform.addItem("Vidoza")
         self.combobox_preferred_platform.setCurrentIndex(0)
         self.combobox_preferred_platform.setToolTip("The streaming service the series will be downloaded from.")
@@ -199,11 +199,18 @@ class MainWindow(QWidget):
         url = self.textbox_url.text().split("/")
 
         print(url)
-
-        if url[2] != "bs.to" and url[2] != "burningseries.co" and url[2] != "burningseries.sx" and url[2] != "burningseries.ac" and url[2] != "burningseries.vc" and url[2] != "burningseries.cx":
+        try:
+            if url[2] != "bs.to" and url[2] != "burningseries.co" and url[2] != "burningseries.sx" and url[2] != "burningseries.ac" and url[2] != "burningseries.vc" and url[2] != "burningseries.cx":
+                error_dialog = QMessageBox()
+                error_dialog.setIcon(QMessageBox.Critical)
+                error_dialog.setText("Invalid Website \"" + url[2] + "\". [TODO DOCS]")
+                error_dialog.setWindowTitle("Error")
+                error_dialog.exec_()
+                return
+        except:
             error_dialog = QMessageBox()
             error_dialog.setIcon(QMessageBox.Critical)
-            error_dialog.setText("Invalid Website \"" + url[2] + "\". [TODO DOCS]")
+            error_dialog.setText("This is not a valid URL.")
             error_dialog.setWindowTitle("Error")
             error_dialog.exec_()
             return
@@ -349,6 +356,35 @@ class MainWindow(QWidget):
         file = open(self.log, "a")
         file.write(message + "\n")
         file.close()
+
+    def threading_dl(self, cmd, THREADING, DLFOLDER):
+        if THREADING == "0":
+            self.write_log("Starting FFMPEG Download via \"" + str(cmd) + "\"")
+            os.system(cmd)
+        else:
+            loop = True
+            while loop:
+
+                self.thread_counter = 0
+
+                for file in os.listdir(DLFOLDER):
+                    try:
+                        os.rename(os.path.join(DLFOLDER, file), os.path.join(DLFOLDER, file))
+                    except:
+                        self.thread_counter += 1
+
+                if self.thread_counter < int(THREADING):
+                    self.write_log(
+                        "----------------------------------Starting Thread----------------------------------")
+                    ffmpeg_thread = threading.Thread(target=self.ffmpeg_download, args=(cmd,))
+                    ffmpeg_thread.start()
+                    self.write_log(
+                        "----------------------------------Thread Started----------------------------------")
+                    loop = False
+                else:
+                    self.write_log("Too many threads running. Sleeping 5 Seconds. (" + str(
+                        self.thread_counter) + "/" + THREADING + ")")
+                    sleep(5)
 
     def start(self):
         DLFOLDER = self.cfg_dlfolder
@@ -590,109 +626,8 @@ class MainWindow(QWidget):
                 cmd = ffmpeg + " -i \"" + dnl_link + "\" -vcodec copy -acodec copy \"" + os.path.join(DLFOLDER, str(
                     folgen_array[folge_counter][1]) + ".mp4\"")
 
-                print(THREADING)
+                self.threading_dl(cmd, THREADING, DLFOLDER)
 
-                if THREADING == "0":
-                    self.write_log("Starting FFMPEG Download via \"" + str(cmd) + "\"")
-                    os.system(cmd)
-                else:
-                    loop = True
-                    while loop:
-
-                        self.thread_counter = 0
-
-                        for file in os.listdir(DLFOLDER):
-                            try:
-                                os.rename(os.path.join(DLFOLDER, file), os.path.join(DLFOLDER, file))
-                            except:
-                                self.thread_counter += 1
-
-                        if self.thread_counter < int(THREADING):
-                            self.write_log(
-                                "----------------------------------Starting Thread----------------------------------")
-                            ffmpeg_thread = threading.Thread(target=self.ffmpeg_download, args=(cmd,))
-                            ffmpeg_thread.start()
-                            self.write_log(
-                                "----------------------------------Thread Started----------------------------------")
-                            loop = False
-                        else:
-                            self.write_log("Too many threads running. Sleeping 5 Seconds. (" + str(
-                                self.thread_counter) + "/" + THREADING + ")")
-                            sleep(5)
-            elif video_mode == "sendfox":
-                loop = True
-                while loop:
-                    try:
-                        driver.get(
-                            driver.find_element_by_xpath('//*[@id="root"]/section/div[8]/a').get_attribute('href'))
-                        loop = False
-                    except:
-                        pass
-                loop = True
-
-
-                while loop:
-                    try:
-                        driver.find_element_by_xpath('//*[@id="vjsplayer"]/button/span[1]').click()
-                        loop = False
-                    except:
-                        pass
-                loop = True
-                while loop:
-                    try:
-                        driver.find_element_by_xpath('//*[@id="vjsplayer"]/div[4]').click()
-                        loop = False
-                    except:
-                        pass
-
-                def process_browser_log_entry(entry):
-                    response = json.loads(entry['message'])['message']
-                    return response
-
-                browser_log = driver.get_log('performance')
-                events = [process_browser_log_entry(entry) for entry in browser_log]
-                events = [event for event in events if 'Network.response' in event['method']]
-
-                m3u8 = ""
-
-                for elem in events:
-                    try:
-                        if str(elem['params']['response']['url']).endswith('index-v1-a1.m3u8'):
-                            m3u8 = str(elem['params']['response']['url']).replace("'", "")
-                            break
-                    except:
-                        continue
-
-                ffmpeg = self.cfg_ffmpeg
-                cmd = ffmpeg + " -i \"" + m3u8 + "\" -vcodec copy -acodec copy \"" + os.path.join(DLFOLDER , str(folgen_array[folge_counter][1]) + ".mp4\"")
-
-                print(THREADING)
-
-                if THREADING == "0":
-                    self.write_log("Starting FFMPEG Download via \"" + str(cmd) + "\"")
-                    os.system(cmd)
-                else:
-                    loop = True
-                    while loop:
-
-                        self.thread_counter = 0
-
-                        for file in os.listdir(DLFOLDER):
-                            try:
-                                os.rename(os.path.join(DLFOLDER, file), os.path.join(DLFOLDER, file))
-                            except:
-                                self.thread_counter += 1
-
-                        if self.thread_counter < int(THREADING):
-                            self.write_log(
-                                "----------------------------------Starting Thread----------------------------------")
-                            ffmpeg_thread = threading.Thread(target=self.ffmpeg_download, args=(cmd,))
-                            ffmpeg_thread.start()
-                            self.write_log("----------------------------------Thread Started----------------------------------")
-                            loop = False
-                        else:
-                            self.write_log("Too many threads running. Sleeping 5 Seconds. (" + str(self.thread_counter) + "/" + THREADING + ")")
-                            sleep(5)
             elif video_mode == "streamtape":
                 loop = True
                 while loop:
@@ -724,35 +659,8 @@ class MainWindow(QWidget):
                 cmd = ffmpeg + " -i \"" + dnl_link + "\" -vcodec copy -acodec copy \"" + os.path.join(DLFOLDER, str(
                     folgen_array[folge_counter][1]) + ".mp4\"")
 
-                print(THREADING)
+                self.threading_dl(cmd, THREADING, DLFOLDER)
 
-                if THREADING == "0":
-                    self.write_log("Starting FFMPEG Download via \"" + str(cmd) + "\"")
-                    os.system(cmd)
-                else:
-                    loop = True
-                    while loop:
-
-                        self.thread_counter = 0
-
-                        for file in os.listdir(DLFOLDER):
-                            try:
-                                os.rename(os.path.join(DLFOLDER, file), os.path.join(DLFOLDER, file))
-                            except:
-                                self.thread_counter += 1
-
-                        if self.thread_counter < int(THREADING):
-                            self.write_log(
-                                "----------------------------------Starting Thread----------------------------------")
-                            ffmpeg_thread = threading.Thread(target=self.ffmpeg_download, args=(cmd,))
-                            ffmpeg_thread.start()
-                            self.write_log(
-                                "----------------------------------Thread Started----------------------------------")
-                            loop = False
-                        else:
-                            self.write_log("Too many threads running. Sleeping 5 Seconds. (" + str(
-                                self.thread_counter) + "/" + THREADING + ")")
-                            sleep(5)
             elif video_mode == "vidoza":
                 loop = True
                 while loop:
@@ -789,35 +697,45 @@ class MainWindow(QWidget):
                 cmd = ffmpeg + " -i \"" + dnl_link + "\" -vcodec copy -acodec copy \"" + os.path.join(DLFOLDER, str(
                     folgen_array[folge_counter][1]) + ".mp4\"")
 
-                print(THREADING)
+                self.threading_dl(cmd, THREADING, DLFOLDER)
+            elif video_mode == "vupload":
+                loop = True
+                while loop:
+                    try:
+                        test_link = driver.find_element_by_xpath('//*[@id="root"]/section/div[8]/a').get_attribute('href')
+                        driver.get(test_link)
+                        loop = False
+                    except:
+                        pass
+                # Try Set to 720p
+                loop = True
+                while loop:
+                    try:
+                        sleep(1)
+                        driver.find_element_by_xpath('//*[@id="vjsplayer"]/div[6]/div[3]/div[7]/button').click() # Click Settings
+                        sleep(0.1)
+                        driver.find_element_by_xpath('//*[@id="vjsplayer"]/div[7]/ul/li[4]').click() # Click Quality List Item
+                        sleep(0.1)
+                        qualities = driver.find_element_by_xpath('//*[@id="vjsplayer"]/div[7]/ul').find_elements_by_tag_name('li') # Quality Settings
+                        sleep(0.1)
+                        qualities[-1].click() # Click highest quality
+                        loop = False
+                    except:
+                        pass
+                loop = True
+                while loop:
+                    try:
+                        dnl_link = driver.find_element_by_xpath('//*[@id="vjsplayer_html5_api"]').get_attribute('src')
+                        loop = False
+                    except:
+                        pass
+                # driver.get(dnl_link)
 
-                if THREADING == "0":
-                    self.write_log("Starting FFMPEG Download via \"" + str(cmd) + "\"")
-                    os.system(cmd)
-                else:
-                    loop = True
-                    while loop:
+                ffmpeg = self.cfg_ffmpeg
+                cmd = ffmpeg + " -i \"" + dnl_link + "\" -vcodec copy -acodec copy \"" + os.path.join(DLFOLDER, str(
+                    folgen_array[folge_counter][1]) + ".mp4\"")
 
-                        self.thread_counter = 0
-
-                        for file in os.listdir(DLFOLDER):
-                            try:
-                                os.rename(os.path.join(DLFOLDER, file), os.path.join(DLFOLDER, file))
-                            except:
-                                self.thread_counter += 1
-
-                        if self.thread_counter < int(THREADING):
-                            self.write_log(
-                                "----------------------------------Starting Thread----------------------------------")
-                            ffmpeg_thread = threading.Thread(target=self.ffmpeg_download, args=(cmd,))
-                            ffmpeg_thread.start()
-                            self.write_log(
-                                "----------------------------------Thread Started----------------------------------")
-                            loop = False
-                        else:
-                            self.write_log("Too many threads running. Sleeping 5 Seconds. (" + str(
-                                self.thread_counter) + "/" + THREADING + ")")
-                            sleep(5)
+                self.threading_dl(cmd, THREADING, DLFOLDER)
 
             print("done")
 
