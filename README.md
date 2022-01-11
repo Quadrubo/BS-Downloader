@@ -1,3 +1,6 @@
+# Archived
+This project is archived. A newer and better version is available at [Quadrubo/BSDL](https://github.com/Quadrubo/BSDL).
+
 # BS-Downloader
 This is a python program to download files from BS.
 
